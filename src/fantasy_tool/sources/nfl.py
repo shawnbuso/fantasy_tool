@@ -12,7 +12,7 @@ so the mapping stays obvious. Derived keys are spelled out in DERIVED below.
 import nflreadpy as nfl
 import polars as pl
 
-from . import pbp
+from . import pbp, snaps
 
 # Straight passthroughs from load_player_stats(summary_level="week").
 _PLAYER_PASSTHROUGH = (
@@ -130,6 +130,7 @@ DERIVED = (
     *[name for name, _, _ in YARDS_ALLOWED_BANDS],
     *pbp.PLAYER_STATS,
     *pbp.TEAM_STATS,
+    *snaps.COLUMNS,
 )
 
 
@@ -291,8 +292,10 @@ def _defense_rows(season: int) -> pl.DataFrame:
 
 def build_season(season: int) -> pl.DataFrame:
     """One wide table of every scorable player-week and team-week in a season."""
-    players = _player_rows(season).join(
-        pbp.player_rows(season), on=["season", "week", "player_id"], how="left"
+    players = (
+        _player_rows(season)
+        .join(pbp.player_rows(season), on=["season", "week", "player_id"], how="left")
+        .join(snaps.rows(season), on=["season", "week", "player_id"], how="left")
     )
     defense = _defense_rows(season).join(
         pbp.team_rows(season), on=["season", "week", "player_id"], how="left"
