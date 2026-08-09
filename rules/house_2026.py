@@ -104,11 +104,18 @@ def participation_trophy(ctx: RuleContext) -> float:
     snaps separately -- the stat feed omits players who recorded nothing, making
     "played and did nothing" otherwise indistinguishable from "didn't play".
 
-    The floor is a fixed number per position rather than that week's average. A fixed
-    value is a lookup instead of a weekly tally of everyone's lineups, it tells a
-    manager in advance what the floor is worth, and it avoids the odd incentive of
-    having your own bonus rise when your opponent's players do well.
+    The floor is a fixed number rather than that week's average. A fixed value is a
+    lookup instead of a weekly tally of everyone's lineups, it tells a manager in
+    advance what the floor is worth, and it avoids the odd incentive of having your own
+    bonus rise when your opponent's players do well.
+
+    Set `value` for one number covering every position -- easiest to explain, and
+    relatively kinder to tight ends, who trigger this most often and score least. Or
+    set `<POSITION>_value` to vary it by position.
     """
     if ctx.base != 0.0 or ctx.line.s("offense_snaps") < 1:
         return 0.0
+    flat = ctx.params.get("value")
+    if flat is not None:
+        return float(flat)
     return float(ctx.param(f"{ctx.line.position}_value", 0.0))

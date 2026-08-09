@@ -1,9 +1,12 @@
 # Participation trophy on top of the recommended balanced setup.
 #
-# Values are the average score of a non-zero starter at each position under this
-# scoring, measured over 2019-2024. A fixed number rather than that week's live
-# average: far less bookkeeping, knowable in advance, and it doesn't make your bonus
-# depend on how your opponent's players did.
+# One number for every position: a starter who took an offensive snap and scored
+# nothing gets this instead of a zero. Same points regardless of position, which is
+# the easiest version to explain and happens to be kindest to tight ends -- they
+# trigger it most often and score least.
+#
+# A fixed number rather than that week's live average: far less bookkeeping, knowable
+# in advance, and it doesn't make your bonus depend on how your opponent's players did.
 
 extends: balanced_qwr.yaml
 name: "Balanced superflex + participation trophy"
@@ -12,7 +15,4 @@ custom_rules:
   modules: [house_2026.py]
   enabled:
     participation_trophy:
-      QB_value: 18
-      RB_value: 17
-      WR_value: 17
-      TE_value: 13
+      value: 15
