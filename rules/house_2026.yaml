@@ -1,0 +1,21 @@
+# Candidate house rules for 2026, to be measured against the baseline.
+#
+# Everything not mentioned here is inherited from base_yahoo.yaml. Set a category to
+# null to switch it off.
+
+extends: base_yahoo.yaml
+name: "2026 house rules -- draft 1"
+
+custom_rules:
+  modules: [house_2026.py]
+
+  # Each entry is the rule name and its parameters. Comment one out to disable it;
+  # `sweep` varies a single parameter across a range to find a sane magnitude.
+  enabled:
+    fg_long_bonus:
+      min_yards: 50
+      bonus: 50
+
+    def_blowout_penalty:
+      threshold: 40
+      penalty: -40

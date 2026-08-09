@@ -18,6 +18,7 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from . import rules
 from .model import StatLine
 from .stats import (
     BONUS_ELIGIBLE,
@@ -51,6 +52,14 @@ class Lineup(BaseModel):
     bench: int = 6
 
 
+class CustomRules(BaseModel):
+    """Python rules for what the settings page can't express. See rules.py."""
+
+    model_config = ConfigDict(extra="forbid")
+    modules: list[Path] = Field(default_factory=list)
+    enabled: dict[str, dict[str, float | int | str | bool]] = Field(default_factory=dict)
+
+
 class RuleSet(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -59,6 +68,7 @@ class RuleSet(BaseModel):
     options: Options = Field(default_factory=Options)
     scoring: dict[str, float] = Field(default_factory=dict)
     bonuses: dict[str, list[Bonus]] = Field(default_factory=dict)
+    custom_rules: CustomRules = Field(default_factory=CustomRules)
 
     @field_validator("scoring")
     @classmethod
@@ -125,8 +135,12 @@ def _merge(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_ruleset(path: str | Path) -> RuleSet:
-    """Read a rule set, resolving a single level of `extends:`."""
-    path = Path(path)
+    """Read a rule set, resolving `extends:` and importing any custom rule modules.
+
+    Module paths are relative to the YAML file, not the working directory, so a rule
+    set stays valid however it's invoked.
+    """
+    path = Path(path).resolve()
     data = yaml.safe_load(path.read_text()) or {}
 
     parent_ref = data.pop("extends", None)
@@ -137,7 +151,21 @@ def load_ruleset(path: str | Path) -> RuleSet:
             raise ValueError(f"{parent_path} itself extends another file; only one level")
         data = _merge(parent, data)
 
-    return RuleSet(**data)
+    ruleset = RuleSet(**data)
+
+    if ruleset.custom_rules.modules:
+        rules.load_modules(path.parent / module for module in ruleset.custom_rules.modules)
+
+    known = rules.registered()
+    unknown = [name for name in ruleset.custom_rules.enabled if name not in known]
+    if unknown:
+        available = ", ".join(sorted(known)) or "none"
+        raise ValueError(
+            f"{path.name} enables unregistered rule(s) {', '.join(unknown)}. "
+            f"Registered: {available}"
+        )
+
+    return ruleset
 
 
 def _yardage_points(raw: float, options: Options) -> float:

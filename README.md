@@ -15,8 +15,8 @@ Under construction. Working today: the persisted NFL data store, a stat registry
 full parity with Yahoo's Scoring Settings page (all 74 categories, including the ones
 disabled by default), and the YAML rule sets and scorer built on top.
 
-Still to come: custom Python rules, the season simulator, and the analysis that
-answers whether a rule decides games.
+Still to come: the season simulator and the analysis that answers whether a rule
+decides games.
 
 ## Setup
 
@@ -26,6 +26,16 @@ uv run fantasy-tool sync --seasons 2018-2024   # one time, ~12s, ~1.4MB
 uv run fantasy-tool info
 uv run fantasy-tool stats                      # the registry, as a settings page
 ```
+
+`sync` downloads nflverse data, computes every derived field, and writes one parquet
+file per season under `data/`. Simulations read only that store and never touch the
+network. Re-running is a no-op; `--force` refreshes.
+
+We persist *stats*, never *scores* — scores are the output of the rules under test,
+so they get recomputed on every run.
+
+Set `NFLREADPY_CACHE=filesystem NFLREADPY_CACHE_DIR=.cache` to cache the raw nflverse
+downloads between syncs.
 
 ## Rule sets
 
@@ -46,15 +56,44 @@ corrupt an analysis while looking entirely plausible. Unknown categories are rej
 with a suggestion, bonuses are held to Yahoo's limits (three tiers, and only on
 passing/rushing/receiving yards), and the 26-category offensive cap is enforced.
 
-`sync` downloads nflverse data, computes every derived field, and writes one parquet
-file per season under `data/`. Simulations read only that store and never touch the
-network. Re-running is a no-op; `--force` refreshes.
+## Custom rules
 
-We persist *stats*, never *scores* — scores are the output of the rules under test,
-so they get recomputed on every run.
+Yahoo can only multiply a stat by a number and add three yardage bonuses. Anything
+conditional — a penalty past a threshold, a boost that depends on the standings, a
+streak — has to be Python. A rule takes one player-week in context and returns a point
+delta; `rules/house_2026.py` holds the current candidates.
 
-Set `NFLREADPY_CACHE=filesystem NFLREADPY_CACHE_DIR=.cache` to cache the raw nflverse
-downloads between syncs.
+```python
+@rule("fg_long_bonus", positions=["K"])
+def fg_long_bonus(ctx: RuleContext) -> float:
+    """Big bonus for a long field goal."""
+    made = sum(
+        1 for y in ctx.line.events.get("fg_made_yards", ()) if y >= ctx.param("min_yards", 50)
+    )
+    return ctx.param("bonus", 50.0) * made
+```
+
+Enable it from YAML, where every threshold is a parameter so magnitudes can be swept
+later without editing code:
+
+```yaml
+custom_rules:
+  modules: [house_2026.py]
+  enabled:
+    fg_long_bonus: {min_yards: 50, bonus: 50}
+```
+
+The context carries the player's line and base points, the manager's own starters,
+this week's opposing starters, and every completed week. Two constraints are
+deliberate:
+
+- **Rules see teammates and opponents base-scored only**, never another rule's output,
+  so rules are order-independent and there is no "which one ran first" class of bug.
+- **`history` holds only completed weeks**, so a rule structurally cannot see the
+  future — enforced by what's in the object, not by a convention asking nicely.
+
+Prefer `.base` over `.total` when reading history for anything streak-shaped, or the
+bonus ends up feeding the streak that earns it.
 
 ## Scoring conventions
 
@@ -113,12 +152,19 @@ mismatch to be explained exactly by it.
 ## Layout
 
 ```
+rules/
+├── base_yahoo.yaml   # the league's real current settings
+├── house_2026.yaml   # candidates: extends the base
+└── house_2026.py     # the Python rule bodies
+
 src/fantasy_tool/
-├── cli.py          # typer commands
-├── model.py        # StatLine: the source-agnostic contract
-├── stats.py        # the registry: a text mirror of Yahoo's settings page
-├── store.py        # sync / load persisted parquet
+├── cli.py            # typer commands
+├── model.py          # StatLine, TeamWeek, History: the source-agnostic contract
+├── stats.py          # the registry: a text mirror of Yahoo's settings page
+├── scoring.py        # YAML rule sets and the base scorer
+├── rules.py          # the @rule registry and RuleContext
+├── store.py          # sync / load persisted parquet
 └── sources/
-    ├── nfl.py      # weekly tables -> StatLine (sync time only)
-    └── pbp.py      # play-by-play categories (sync time only)
+    ├── nfl.py        # weekly tables -> StatLine (sync time only)
+    └── pbp.py        # play-by-play categories (sync time only)
 ```

@@ -116,6 +116,21 @@ def validate(
         tiers = ", ".join(f"{b.target:g}+ -> +{b.points:g}" for b in bonuses)
         console.print(f"Bonus on {key}: {tiers}")
 
+    if not ruleset.custom_rules.enabled:
+        return
+
+    from .rules import registered
+
+    known = registered()
+    console.print()
+    custom = Table("Custom rule", "Applies to", "Parameters", "What it does")
+    for name, params in ruleset.custom_rules.enabled.items():
+        entry = known[name]
+        applies = "any" if len(entry.positions) > 5 else " ".join(sorted(entry.positions))
+        shown = ", ".join(f"{k}={v}" for k, v in params.items()) or "defaults"
+        custom.add_row(name, applies, shown, entry.doc)
+    console.print(custom)
+
 
 @app.command()
 def score(
