@@ -1,0 +1,29 @@
+# Flavor rules: cheap thrills, all native Yahoo categories.
+#
+# Everything here is a category Yahoo already supports and your league currently has
+# switched off, so it scores itself with no weekly bookkeeping. Nothing existing is
+# reduced -- these are new categories, some of which happen to be negative.
+#
+# Sits on top of the participation trophy, which sits on the balanced superflex.
+
+extends: trophy.yaml
+name: "Balanced superflex + trophy + flavor"
+
+scoring:
+  # --- Shame
+  # Fires in ~8.5% of team-weeks: about once every twelve weeks for a given team.
+  pat_missed: -1
+  # The chip shot. Measured 0.0% over four seasons -- kickers essentially never miss
+  # from inside 20. A rule everyone will talk about and nobody will ever trigger.
+  fg_missed_0_19: -5
+  # Missable range only. Long misses aren't penalised: they're the coach's decision
+  # as much as the kicker's, and they fire far too often to be flavour.
+  fg_missed_20_29: -2
+  fg_missed_30_39: -2
+  # Handing it to the other team's defense, on top of the interception itself. ~10%.
+  pick_sixes_thrown: -2
+
+  # --- Highlights
+  passing_tds_40: 2
+  receiving_tds_40: 2
+  rushing_tds_40: 3  # rarest of the three, at 4.8% of team-weeks

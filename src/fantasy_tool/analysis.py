@@ -148,13 +148,21 @@ class MatchupDiff:
 def _rule_swings(
     base: SeasonResult, candidate: SeasonResult, week: int, home: str, away: str
 ) -> dict[str, float]:
-    del base
+    """How much each custom rule *changed* this matchup, relative to the baseline.
+
+    Subtracting the baseline's own contribution matters as soon as candidates are
+    built in layers. A rule enabled in both runs contributes to both team totals and
+    so changes nothing, but reading the candidate alone would credit it with its full
+    effect and show a rule that was already in force as if it were newly flipping
+    games.
+    """
     swings: dict[str, float] = {}
-    for team, direction in ((home, 1.0), (away, -1.0)):
-        for line in candidate.team_week(team, week).scored:
-            for name, delta in line.rule_points.items():
-                swings[name] = swings.get(name, 0.0) + direction * delta
-    return swings
+    for result, sign in ((candidate, 1.0), (base, -1.0)):
+        for team, direction in ((home, 1.0), (away, -1.0)):
+            for line in result.team_week(team, week).scored:
+                for name, delta in line.rule_points.items():
+                    swings[name] = swings.get(name, 0.0) + sign * direction * delta
+    return {name: value for name, value in swings.items() if abs(value) > NEGLIGIBLE}
 
 
 def diff_season(base: SeasonResult, candidate: SeasonResult) -> list[MatchupDiff]:
@@ -318,20 +326,31 @@ def compare(
     fired_any = 0
     fired_by_rule: dict[str, int] = {}
     points_by_position: dict[str, float] = {}
-    for _, cand in pairs:
-        for week in cand.weeks:
-            for team_week in week.team_weeks.values():
+    for base, cand in pairs:
+        for base_week, cand_week in zip(base.weeks, cand.weeks, strict=True):
+            for team, team_week in cand_week.team_weeks.items():
                 names = {
                     name
                     for line in team_week.scored
                     for name, delta in line.rule_points.items()
                     if abs(delta) > NEGLIGIBLE
                 }
-                fired_any += bool(names)
                 for name in names:
                     fired_by_rule[name] = fired_by_rule.get(name, 0) + 1
+
+                # "Fired" means this team's score moved, whatever moved it. Counting
+                # custom-rule contributions alone reports nothing at all for a
+                # candidate that only changes Yahoo categories -- which is most of them.
+                before = base_week.team_weeks[team]
+                if abs(team_week.points - before.points) > NEGLIGIBLE:
+                    fired_any += 1
+
+                # Attribute by position from the change in each player's score, for the
+                # same reason: rule contributions miss every Yahoo-native change.
+                was = {line.line.player_id: line.total for line in before.scored}
                 for line in team_week.scored:
-                    for delta in line.rule_points.values():
+                    delta = line.total - was.get(line.line.player_id, 0.0)
+                    if abs(delta) > NEGLIGIBLE:
                         position = line.line.position or "(no production)"
                         points_by_position[position] = points_by_position.get(position, 0.0) + delta
 

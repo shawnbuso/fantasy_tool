@@ -289,3 +289,43 @@ def test_rules_change_the_totals(league, rules) -> None:
     base_points = sum(r.points_for for r in base.standings.values())
     candidate_points = sum(r.points_for for r in with_rules.standings.values())
     assert base_points != pytest.approx(candidate_points)
+
+
+def test_league_is_reproducible_across_processes(pool, rules) -> None:
+    """Same seed, same league -- in a *different* interpreter, not just this one.
+
+    Python randomises string hashing per process, so iterating a set of position names
+    yields a different order in every run. That reordered the draft board and broke
+    ties differently, which meant a seed reproduced a league within one process and
+    not between two. Reported numbers have to reproduce tomorrow, so this runs a
+    subprocess with a hash seed that differs from ours and compares.
+    """
+    import hashlib
+    import json
+    import os
+    import subprocess
+    import sys
+
+    def fingerprint(league) -> str:
+        blob = json.dumps({t: sorted(v) for t, v in sorted(league.rosters.items())}, sort_keys=True)
+        return hashlib.sha256(blob.encode()).hexdigest()
+
+    script = (
+        "import hashlib, json;"
+        "from fantasy_tool.scoring import load_ruleset;"
+        "from fantasy_tool.sources.synthetic import build_pool, generate;"
+        f"r = load_ruleset({str(RULES_DIR / 'base_yahoo.yaml')!r});"
+        f"lg = generate(build_pool({SEASON}, r), 7, r);"
+        "blob = json.dumps({t: sorted(v) for t, v in sorted(lg.rosters.items())}, sort_keys=True);"
+        "print(hashlib.sha256(blob.encode()).hexdigest())"
+    )
+    environment = {**os.environ, "PYTHONHASHSEED": "12345"}
+    other = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=environment,
+        cwd=str(RULES_DIR.parent),
+    )
+    assert other.stdout.strip() == fingerprint(generate(pool, 7, rules))

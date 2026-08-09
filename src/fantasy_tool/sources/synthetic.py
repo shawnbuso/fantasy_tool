@@ -102,7 +102,10 @@ def _flex_demand(
     replacement level for the other positions far too deep -- which inflates their
     value over replacement and drafts rosters carrying six tight ends.
     """
-    eligible = {position for slot in flex for position in slot.eligible}
+    # Sorted, not a bare set: string hashing is randomised per process, so
+    # iterating a set of positions gives a different order every run and the
+    # draft board ends up ordered differently. Same seed, different league.
+    eligible = sorted({position for slot in flex for position in slot.eligible})
     contenders: list[tuple[float, str]] = []
     for position in eligible:
         ranked = sorted(values.get(position, []), reverse=True)
@@ -121,7 +124,7 @@ def _flex_demand(
 def roster_plan(slots, values: dict[str, list[float]] | None = None, teams: int = DEFAULT_TEAMS):
     """How many of each position to draft, given the lineup and what players are worth."""
     dedicated, flex = lineup_shape(slots)
-    positions = set(dedicated) | {p for slot in flex for p in slot.eligible}
+    positions = sorted(set(dedicated) | {p for slot in flex for p in slot.eligible})
 
     if values:
         share = _flex_demand(values, dedicated, flex, teams)

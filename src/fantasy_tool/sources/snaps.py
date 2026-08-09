@@ -28,8 +28,12 @@ def _crosswalk() -> pl.DataFrame:
 
 def rows(season: int) -> pl.DataFrame:
     """Offensive snaps per (player_id, week), or an empty frame before 2012."""
-    schema = {"season": pl.Int32, "week": pl.Int32, "player_id": pl.String,
-              "offense_snaps": pl.Float64}
+    schema = {
+        "season": pl.Int32,
+        "week": pl.Int32,
+        "player_id": pl.String,
+        "offense_snaps": pl.Float64,
+    }
     if season < FIRST_SEASON:
         return pl.DataFrame(schema=schema)
 
