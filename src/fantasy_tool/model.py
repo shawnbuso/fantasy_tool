@@ -219,6 +219,7 @@ class League:
     rosters: dict[str, frozenset[str]]
     lineups: dict[tuple[str, int], tuple[str, ...]]
     schedule: tuple[Matchup, ...]
+    positions: dict[str, str] = field(default_factory=dict)
     meta: dict[str, object] = field(default_factory=dict)
 
     def line(self, player_id: str, week: int) -> StatLine:
@@ -226,9 +227,17 @@ class League:
 
         Byes, injuries, and inactives are all simply absent from the source data, so
         zero-filling here means none of them needs a special case anywhere else.
+
+        The blank keeps the player's position. A tight end who didn't produce is still
+        a tight end: without this, position-scoped rules silently skip him and the
+        per-position breakdown under-counts, both in ways that look like real results.
         """
         found = self.lines.get((player_id, week))
-        return found if found is not None else zero_line(player_id, self.settings.season, week)
+        if found is not None:
+            return found
+        return zero_line(
+            player_id, self.settings.season, week, position=self.positions.get(player_id, "")
+        )
 
     def week_matchups(self, week: int) -> tuple[Matchup, ...]:
         return tuple(m for m in self.schedule if m.week == week)
@@ -249,7 +258,7 @@ class SeasonResult:
         return next(w.team_weeks[team] for w in self.weeks if w.week == week)
 
 
-def zero_line(player_id: str, season: int, week: int) -> StatLine:
+def zero_line(player_id: str, season: int, week: int, position: str = "") -> StatLine:
     """A blank line, used when a player has no row for a week.
 
     Byes, injuries, and inactives all show up as simply missing from the source
@@ -258,7 +267,7 @@ def zero_line(player_id: str, season: int, week: int) -> StatLine:
     return StatLine(
         player_id=player_id,
         name=player_id,
-        position="",
+        position=position,
         nfl_team="",
         season=season,
         week=week,

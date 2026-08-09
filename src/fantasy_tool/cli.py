@@ -216,6 +216,90 @@ def sim(
 
 
 @app.command()
+def evaluate(
+    base: Annotated[Path, typer.Option(help="Baseline rule set")],
+    candidate: Annotated[Path, typer.Option(help="Candidate rule set to test")],
+    seasons: Annotated[str, typer.Option(help="e.g. 2019-2024")] = "2019-2024",
+    leagues: Annotated[int, typer.Option(help="Synthetic leagues per season")] = 20,
+    seed: Annotated[int, typer.Option(help="Base seed; leagues vary from it")] = 7,
+    teams: Annotated[int, typer.Option(help="League size")] = 10,
+    csv: Annotated[Path | None, typer.Option(help="Write per-matchup rows here")] = None,
+    root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
+) -> None:
+    """Measure what a candidate rule set would have done, against the baseline.
+
+    Each league is generated once from the baseline and simulated twice, so the two
+    runs share a draft, a schedule, and lineups and the only difference is the rules.
+    """
+    from .analysis import compare
+    from .report import render
+    from .scoring import load_ruleset
+    from .sim import simulate
+    from .sources.synthetic import build_pool, generate
+
+    baseline_rules = load_ruleset(base)
+    candidate_rules = load_ruleset(candidate)
+    wanted = _parse_seasons(seasons)
+
+    pairs = []
+    skills = []
+    with console.status("Simulating...") as status:
+        for season in wanted:
+            status.update(f"Season {season}: building player pool...")
+            pool = build_pool(season, baseline_rules, root=root, teams=teams)
+            for index in range(leagues):
+                status.update(f"Season {season}: league {index + 1} of {leagues}...")
+                # Generated from the baseline so lineups are identical across both runs.
+                league = generate(pool, seed + index, baseline_rules, n_teams=teams)
+                pairs.append((simulate(league, baseline_rules), simulate(league, candidate_rules)))
+                skills.append(league.meta["skill"])
+
+    analysis = compare(pairs, baseline_rules, candidate_rules, skills)
+    render(analysis, console, baseline=baseline_rules.name, candidate=candidate_rules.name)
+
+    if csv:
+        import csv as csv_module
+
+        from .analysis import diff_season
+
+        rows = [d for pair in pairs for d in diff_season(*pair)]
+        with csv.open("w", newline="") as handle:
+            writer = csv_module.writer(handle)
+            writer.writerow(
+                [
+                    "league",
+                    "week",
+                    "home",
+                    "away",
+                    "home_base",
+                    "away_base",
+                    "home_candidate",
+                    "away_candidate",
+                    "swing",
+                    "triggered",
+                    "flipped",
+                ]
+            )
+            for row in rows:
+                writer.writerow(
+                    [
+                        row.league_key,
+                        row.week,
+                        row.home,
+                        row.away,
+                        f"{row.home_base:.2f}",
+                        f"{row.away_base:.2f}",
+                        f"{row.home_candidate:.2f}",
+                        f"{row.away_candidate:.2f}",
+                        f"{row.swing:.2f}",
+                        int(row.triggered),
+                        int(row.flipped),
+                    ]
+                )
+        console.print(f"\n[dim]Wrote {len(rows):,} matchup rows to {csv}[/dim]")
+
+
+@app.command()
 def info(
     root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
 ) -> None:

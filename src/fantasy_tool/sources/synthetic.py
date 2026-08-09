@@ -556,5 +556,6 @@ def generate(
         rosters=rosters,
         lineups=lineups,
         schedule=schedule,
+        positions=positions,
         meta={"skill": skill, "seed": seed},
     )

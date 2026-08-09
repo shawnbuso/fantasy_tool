@@ -15,13 +15,43 @@ Under construction. Working today: the persisted NFL data store, a stat registry
 full parity with Yahoo's Scoring Settings page (all 74 categories, including the ones
 disabled by default), and the YAML rule sets and scorer built on top.
 
-The synthetic league generator and season simulator work too:
+The tool answers the question it was built for:
 
 ```bash
-uv run fantasy-tool sim --rules rules/house_2026.yaml --season 2024 --seed 7
+uv run fantasy-tool evaluate \
+    --base rules/base_yahoo.yaml --candidate rules/house_2026.yaml \
+    --seasons 2019-2024 --leagues 20
 ```
 
-Still to come: the counterfactual analysis that turns two runs into a verdict.
+Each league is generated once from the baseline and simulated twice, so both runs
+share a draft, a schedule, and lineups — the only difference is the rules.
+
+## Reading the verdict
+
+The headline number is **decisive rate**: given that a rule fired, how often was its
+swing bigger than the margin of the game it landed in. That is the direct formalisation
+of "this rule decides matches". It beats a flip rate, which additionally requires the
+rule to land on the losing side, and it stays comparable between rules that fire at
+very different frequencies.
+
+| decisive rate | verdict | |
+|---|---|---|
+| ≥ 50% | **AUTO-DECIDE** | when it fires, it is the game |
+| 25–50% | **HIGH SWING** | dial the magnitude down |
+| 10–25% | **SPICY** | adds variance without taking over |
+| < 10% | **FLAVOR** | mostly cosmetic |
+
+Plus a **LOTTERY TICKET** flag for rules that fire in under 2% of team-weeks but
+decide the game when they do. That is arguably the worst failure mode and a flip rate
+alone can't see it.
+
+Every rate carries a Wilson interval, because sample size is the whole problem here: a
+rule firing 6% of the time in one season gives four events.
+
+**Size alone doesn't make a rule decisive — asymmetry does.** A thousand points to
+every team's kicker moves every score enormously and changes no result. The tool
+measures that correctly as no swing at all, and there's a test for it, because
+"generous participation bonus" is a shape real house rules take.
 
 ## How the simulation is calibrated
 
