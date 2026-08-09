@@ -385,7 +385,9 @@ def balance(
     manager compares when filling a flex slot.
     """
     from .balance import FLEX_POSITIONS, profile, solve, startable_pool
+    from .model import parse_slots
     from .scoring import load_ruleset
+    from .sources.synthetic import lineup_shape
 
     ruleset = load_ruleset(rules)
     wanted = _parse_seasons(seasons)
@@ -396,7 +398,20 @@ def balance(
         premium_pair = (position.strip().upper(), stat.strip())
 
     stats = sorted({*lever_names, *([premium_pair[1]] if premium_pair else [])})
-    pool = startable_pool(teams)
+
+    # Only positions competing for a flex slot need balancing. One with nothing but a
+    # dedicated slot is started once by every team, so scoring less costs nobody.
+    _, flex = lineup_shape(parse_slots(ruleset.lineup.starters))
+    competing = tuple(p for p in FLEX_POSITIONS if any(p in slot.eligible for slot in flex))
+    if not competing:
+        console.print("[yellow]No flex slots in this lineup, so no position competes.[/yellow]")
+        raise typer.Exit(1)
+
+    pool = startable_pool(teams, flex_share=len(flex) / len(competing))
+    console.print(
+        f"[dim]Balancing {', '.join(competing)} -- the positions sharing "
+        f"{len(flex)} flex slot(s). Others are started once by everyone.[/dim]"
+    )
 
     table = Table(title=f"Points per game, top {pool} at each position", title_justify="left")
     table.add_column("Receptions")
@@ -409,13 +424,17 @@ def balance(
         variant = ruleset.model_copy(update={"scoring": {**ruleset.scoring, "receptions": value}})
         with console.status(f"Profiling at {value:g} PPR..."):
             profiles = profile(wanted, variant, stats, top_n=pool, root=root)
-        means = {p: profiles[p].mean_points for p in FLEX_POSITIONS if p in profiles}
+        means = {p: profiles[p].mean_points for p in competing}
         table.add_row(
             f"{value:g}",
-            *[f"{means[p]:.1f}" for p in FLEX_POSITIONS],
+            *[f"{profiles[p].mean_points:.1f}" if p in profiles else "-" for p in FLEX_POSITIONS],
             f"{max(means.values()) - min(means.values()):.1f}",
         )
-        solutions[value] = (variant, profiles, solve(profiles, lever_names, premium_pair))
+        solutions[value] = (
+            variant,
+            profiles,
+            solve(profiles, lever_names, premium_pair, competing),
+        )
 
     console.print(table)
 

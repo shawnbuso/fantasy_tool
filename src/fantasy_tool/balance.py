@@ -127,15 +127,22 @@ def solve(
     profiles: dict[str, PositionProfile],
     levers: list[str],
     premium: tuple[str, str] | None = None,
+    positions: tuple[str, ...] = FLEX_POSITIONS,
 ) -> Solution | None:
-    """Find increases that bring every flex position to the same average.
+    """Find increases that bring the given positions to the same average.
 
     `levers` are Yahoo categories raised for everyone. `premium` is an optional
     (position, stat) pair scored only for that position, which a custom rule provides
     because Yahoo cannot. There must be exactly one unknown per position being lifted.
+
+    `positions` should be the ones that actually compete for a slot. A position with
+    only a dedicated slot doesn't need balancing at all: every team starts exactly one,
+    so scoring less is symmetric and costs nobody anything. It only matters when a
+    position has to win a flex slot against the others.
     """
-    anchor = max(profiles.values(), key=lambda p: p.mean_points).position
-    others = [p for p in FLEX_POSITIONS if p != anchor and p in profiles]
+    ranked = {p: profiles[p] for p in positions if p in profiles}
+    anchor = max(ranked.values(), key=lambda p: p.mean_points).position
+    others = [p for p in positions if p != anchor and p in profiles]
     unknowns = [*levers] + ([premium] if premium else [])
     if len(unknowns) != len(others):
         return None
@@ -177,5 +184,8 @@ def solve(
         achieved[position] = total
 
     return Solution(
-        target=achieved[anchor], increments=increments, premiums=premiums, achieved=achieved
+        target=achieved[anchor],
+        increments=increments,
+        premiums=premiums,
+        achieved={p: v for p, v in achieved.items() if p in positions},
     )

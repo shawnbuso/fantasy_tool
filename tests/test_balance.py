@@ -173,3 +173,41 @@ def test_valuation_includes_custom_rules() -> None:
     )
     assert score_standalone(tight_end, balanced) > score_base(tight_end, balanced)
     rules_mod.clear_registry()
+
+
+def test_only_flex_competitors_need_balancing(superflex) -> None:
+    """A position with nothing but a dedicated slot doesn't compete, so it doesn't count.
+
+    This is what makes the tight end problem go away without a custom rule. Tight ends
+    score less and Yahoo can't change that, but every team starts exactly one, so the
+    shortfall is symmetric and costs nobody -- the same way a kicker scoring less than
+    a running back bothers no one. It only hurts when a tight end has to beat a
+    quarterback for a shared slot.
+    """
+    profiles = profile(SEASONS, superflex, LEVERS, top_n=startable_pool(10))
+    competing = ("QB", "RB", "WR")
+
+    solution = solve(profiles, LEVERS, None, competing)
+    assert solution is not None
+    assert solution.feasible
+    assert solution.spread == pytest.approx(0.0, abs=1e-6)
+    # Balanced with Yahoo categories alone -- no per-position rule anywhere.
+    assert not solution.premiums
+    assert set(solution.achieved) == set(competing)
+
+
+def test_the_recommended_setup_needs_no_custom_rules() -> None:
+    balanced = load_ruleset(RULES_DIR / "balanced_qwr.yaml")
+    assert not balanced.custom_rules.enabled
+    assert balanced.scoring["receptions"] == 1.0
+    # Every change is an increase on Yahoo's defaults.
+    base = load_ruleset(RULES_DIR / "base_yahoo.yaml")
+    for key, value in base.scoring.items():
+        if key in balanced.scoring:
+            assert balanced.scoring[key] >= value, key
+    # Tight end has a slot of its own and shares none.
+    from fantasy_tool.model import parse_slots
+
+    slots = parse_slots(balanced.lineup.starters)
+    assert any(s.label == "TE" for s in slots)
+    assert not any("TE" in s.eligible and s.is_flex for s in slots)

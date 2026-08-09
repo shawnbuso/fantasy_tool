@@ -44,6 +44,7 @@ SLOT_ELIGIBILITY: dict[str, frozenset[str]] = {
     "W/R": frozenset({"WR", "RB"}),
     "W/T": frozenset({"WR", "TE"}),
     "W/R/T": frozenset({"WR", "RB", "TE"}),
+    "Q/W/R": frozenset({"QB", "WR", "RB"}),
     "Q/W/R/T": frozenset({"QB", "WR", "RB", "TE"}),  # superflex
 }
 

@@ -1,0 +1,15 @@
+# The recommended setup: superflex-style roster, positions balanced, no custom rules.
+#
+# Four flex slots shared by QB, RB and WR, with tight end on its own dedicated slot.
+# Full PPR, plus two yardage increases that bring the three flex-competing positions
+# to the same average. Every change is an increase; nothing is reduced.
+#
+# All of this is native Yahoo settings, so it scores itself with no weekly bookkeeping.
+
+extends: superflex_qwr.yaml
+name: "Balanced superflex (QB/RB/WR flex), full PPR"
+
+scoring:
+  receptions: 1.0
+  receiving_yards: 0.1325  # was 0.1 -- about 1 point per 7.5 yards
+  rushing_yards: 0.1253    # was 0.1 -- about 1 point per 8 yards
