@@ -85,6 +85,73 @@ def stats(
 
 
 @app.command()
+def validate(
+    rules: Annotated[Path, typer.Argument(help="Rule set YAML")],
+) -> None:
+    """Parse a rule set and print what it enables."""
+    from pydantic import ValidationError
+
+    from .scoring import load_ruleset
+    from .stats import STAT_BY_KEY
+
+    try:
+        ruleset = load_ruleset(rules)
+    except (ValidationError, ValueError) as exc:
+        console.print(f"[red]{rules} is not valid:[/red]\n{exc}")
+        raise typer.Exit(1) from exc
+
+    console.print(f"[green]OK[/green]  {ruleset.name}")
+    console.print(f"Starters: {' '.join(ruleset.lineup.starters)}  (+{ruleset.lineup.bench} bench)")
+    console.print(
+        f"Fractional points: {ruleset.options.fractional_points}   "
+        f"Negative points: {ruleset.options.negative_points}\n"
+    )
+
+    table = Table("Category", "Yahoo label", "Value")
+    for key, value in ruleset.scoring.items():
+        table.add_row(key, STAT_BY_KEY[key].label, f"{value:g}")
+    console.print(table)
+
+    for key, bonuses in ruleset.bonuses.items():
+        tiers = ", ".join(f"{b.target:g}+ -> +{b.points:g}" for b in bonuses)
+        console.print(f"Bonus on {key}: {tiers}")
+
+
+@app.command()
+def score(
+    rules: Annotated[Path, typer.Option(help="Rule set YAML")],
+    season: Annotated[int, typer.Option(help="Season to score")],
+    week: Annotated[int, typer.Option(help="Week to score")],
+    top: Annotated[int, typer.Option(help="How many to show")] = 20,
+    position: Annotated[str | None, typer.Option(help="Filter, e.g. K or DEF")] = None,
+    root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
+) -> None:
+    """Score one week under a rule set. A quick eyeball check that rules do what you meant."""
+    from .scoring import load_ruleset, score_base
+
+    ruleset = load_ruleset(rules)
+    lines = store.load_statlines(season, root=root)
+    scored = [
+        (score_base(line, ruleset), line)
+        for line in lines.values()
+        if line.week == week and (position is None or line.position == position.upper())
+    ]
+    if not scored:
+        console.print(f"[yellow]No lines for {season} week {week}.[/yellow]")
+        raise typer.Exit(1)
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    table = Table(title=f"{ruleset.name} -- {season} week {week}", title_justify="left")
+    table.add_column("Points", justify="right")
+    table.add_column("Player")
+    table.add_column("Pos")
+    table.add_column("Team")
+    for points, line in scored[:top]:
+        table.add_row(f"{points:.2f}", line.name, line.position, line.nfl_team)
+    console.print(table)
+
+
+@app.command()
 def info(
     root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
 ) -> None:

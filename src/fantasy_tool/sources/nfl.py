@@ -41,6 +41,12 @@ _PLAYER_PASSTHROUGH = (
     # Misc offense
     "fumbles_total",
     "fumbles_lost_total",
+    # Kept only so the scoring oracle can pin nflverse's narrower fumble convention:
+    # its fantasy_points_ppr sums these three and so misses return fumbles, which
+    # Yahoo's "Fumbles Lost" does charge. Not exposed as scoring categories.
+    "sack_fumbles_lost",
+    "rushing_fumbles_lost",
+    "receiving_fumbles_lost",
     "special_teams_tds",
     "punt_returns",
     "punt_return_yards",

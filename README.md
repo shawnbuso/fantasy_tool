@@ -11,9 +11,12 @@ season instead of discovering it in week 6.
 
 ## Status
 
-Under construction. Working today: the persisted NFL data store, and a stat registry
-at full parity with Yahoo's Scoring Settings page — all 74 categories, including the
-ones disabled by default.
+Under construction. Working today: the persisted NFL data store, a stat registry at
+full parity with Yahoo's Scoring Settings page (all 74 categories, including the ones
+disabled by default), and the YAML rule sets and scorer built on top.
+
+Still to come: custom Python rules, the season simulator, and the analysis that
+answers whether a rule decides games.
 
 ## Setup
 
@@ -23,6 +26,25 @@ uv run fantasy-tool sync --seasons 2018-2024   # one time, ~12s, ~1.4MB
 uv run fantasy-tool info
 uv run fantasy-tool stats                      # the registry, as a settings page
 ```
+
+## Rule sets
+
+`rules/base_yahoo.yaml` is the league's current settings. A category is enabled by
+giving it a value; anything omitted is switched off in Yahoo.
+
+```bash
+uv run fantasy-tool validate rules/base_yahoo.yaml
+uv run fantasy-tool score --rules rules/base_yahoo.yaml --season 2024 --week 1 --position K
+```
+
+A candidate rule set starts from `extends: base_yahoo.yaml` and lists only what
+changes; setting a category to `null` turns it off. The merge is one level deep on
+purpose, so a candidate always reads as "the base, plus these specific changes".
+
+Validation is deliberately strict, because a typo that silently scored zero would
+corrupt an analysis while looking entirely plausible. Unknown categories are rejected
+with a suggestion, bonuses are held to Yahoo's limits (three tiers, and only on
+passing/rushing/receiving yards), and the 26-category offensive cap is enforced.
 
 `sync` downloads nflverse data, computes every derived field, and writes one parquet
 file per season under `data/`. Simulations read only that store and never touch the
@@ -75,6 +97,18 @@ drive-level defensive stops. These are derived in `sources/pbp.py` at sync time.
 yard, lateral to Williams for 41 and the score, is a 42-yard *passing* touchdown but
 not a 40-yard *receiving* touchdown for St. Brown. Ball-carrier categories therefore
 require the player to have actually scored, not just to have been on the play.
+
+**A kicker is not confined to kicking categories.** Yahoo's Offense / Kickers / Defense
+headings organise the settings page; they don't restrict who can earn what. Fake field
+goals are in the data — Chris Boswell threw a touchdown, Jason Sanders caught one, Jake
+Elliott threw an interception — and Yahoo pays out for all of them. The only real
+boundary is between players and team D/ST units, which are different kinds of entity.
+
+**nflverse's own `fantasy_points_ppr` uses a narrower fumble rule than Yahoo**, summing
+the three positional fumble columns and so missing return fumbles. That difference is
+the *only* permitted disagreement in the scoring oracle test, which checks every
+offensive player-week across every synced season (~45,000 lines) and requires each
+mismatch to be explained exactly by it.
 
 ## Layout
 

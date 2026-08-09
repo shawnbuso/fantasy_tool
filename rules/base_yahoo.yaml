@@ -1,0 +1,65 @@
+# Four Finger Family (Yahoo league 786986) -- current settings, 2026.
+#
+# Transcribed from the commissioner Scoring Settings page. A category is enabled by
+# giving it a value; anything omitted is toggled off in Yahoo. `fantasy-tool stats`
+# lists every category Yahoo supports, including the ones off here.
+#
+# This file is the baseline every candidate rule set is measured against, so change
+# it only when the real league changes.
+
+name: "Four Finger Family -- 2026 baseline"
+
+lineup:
+  starters: [QB, RB, RB, WR, WR, TE, "W/R/T", K, DEF]
+  bench: 6
+
+options:
+  fractional_points: true
+  negative_points: true
+
+scoring:
+  # --- Passing
+  passing_tds: 4
+  passing_interceptions: -1
+  passing_yards: 0.04 # 25 yards = 1 point
+
+  # --- Rushing
+  rushing_tds: 6
+  rushing_yards: 0.1 # 10 yards = 1 point
+
+  # --- Receiving
+  receiving_tds: 6
+  receptions: 0.5 # half PPR
+  receiving_yards: 0.1 # 10 yards = 1 point
+
+  # --- Kick and punt returning
+  special_teams_tds: 6
+
+  # --- Miscellaneous
+  # Yahoo's "Fumbles Lost" charges every fumble the player lost, return-game
+  # fumbles included. That is broader than nflverse's own fantasy-point column;
+  # see tests/test_scoring.py.
+  fumbles_lost_total: -2
+
+  # --- Kicking
+  fg_made_0_19: 3
+  fg_made_20_29: 3
+  fg_made_30_39: 3
+  fg_made_40_49: 4
+  fg_made_50_: 5
+  pat_made: 1
+
+  # --- Defense / special teams
+  # Points Allowed 21-27 is switched off in the league, so it has no entry here.
+  pa_0: 10
+  pa_1_6: 7
+  pa_7_13: 4
+  pa_14_20: 1
+  pa_28_34: -1
+  pa_35_plus: -4
+  def_sacks: 1
+  def_interceptions: 2
+  def_fumble_recoveries: 2
+  def_tds: 6
+  def_safeties: 2
+  def_blocked_kicks: 2

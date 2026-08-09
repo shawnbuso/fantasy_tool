@@ -23,6 +23,22 @@ MAX_OFFENSE_CATEGORIES = 26
 BONUS_ELIGIBLE = ("passing_yards", "rushing_yards", "receiving_yards")
 MAX_BONUSES_PER_CATEGORY = 3
 
+# Categories measured in yards. The league-wide `fractional_points` and
+# `negative_points` switches apply to these and to nothing else -- Yahoo's help is
+# explicit that they govern "categories that track yards earned or lost".
+YARDAGE_KEYS = frozenset(
+    {
+        "passing_yards",
+        "rushing_yards",
+        "receiving_yards",
+        "return_yards",
+        "fg_total_yards",
+        "def_return_yards",
+        "def_kickoff_return_yards",
+        "def_punt_return_yards",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Stat:
@@ -37,6 +53,17 @@ class Stat:
     @property
     def supported(self) -> bool:
         return self.column is not None
+
+    @property
+    def is_team_defense(self) -> bool:
+        """Scored for a team D/ST unit rather than an individual player.
+
+        This is the only scoring boundary that matters. Yahoo's Offense / Kickers
+        headings are how the settings page is organised, not a restriction on who can
+        earn a category: a kicker who throws a touchdown on a fake still gets the
+        passing points. A team unit, though, is a different kind of entity entirely.
+        """
+        return self.positions == DST
 
 
 # Order matches the settings page top to bottom.
