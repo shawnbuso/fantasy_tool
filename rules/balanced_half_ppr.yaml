@@ -12,10 +12,12 @@
 extends: superflex.yaml
 name: "Balanced superflex -- 0.5 PPR"
 
+yards_per_point:
+  receiving_yards: 5.838   # was 10
+  rushing_yards: 7.491     # was 10
+
 scoring:
   receptions: 0.5
-  receiving_yards: 0.1713   # was 0.1
-  rushing_yards: 0.1335    # was 0.1
 
 custom_rules:
   modules: [house_2026.py]

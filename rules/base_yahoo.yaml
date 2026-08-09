@@ -17,20 +17,24 @@ options:
   fractional_points: true
   negative_points: true
 
+# Yardage categories, in Yahoo's own units: how many yards make one point. These are
+# the numbers the settings page asks for, so they can be copied straight across.
+yards_per_point:
+  passing_yards: 25
+  rushing_yards: 10
+  receiving_yards: 10
+
 scoring:
   # --- Passing
   passing_tds: 4
   passing_interceptions: -1
-  passing_yards: 0.04 # 25 yards = 1 point
 
   # --- Rushing
   rushing_tds: 6
-  rushing_yards: 0.1 # 10 yards = 1 point
 
   # --- Receiving
   receiving_tds: 6
   receptions: 0.5 # half PPR
-  receiving_yards: 0.1 # 10 yards = 1 point
 
   # --- Kick and punt returning
   special_teams_tds: 6

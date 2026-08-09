@@ -29,7 +29,7 @@ from .stats import (
     suggest,
 )
 
-MERGED_SECTIONS = ("scoring", "bonuses")
+MERGED_SECTIONS = ("scoring", "yards_per_point", "bonuses")
 
 
 class Bonus(BaseModel):
@@ -67,6 +67,11 @@ class RuleSet(BaseModel):
     lineup: Lineup
     options: Options = Field(default_factory=Options)
     scoring: dict[str, float] = Field(default_factory=dict)
+    # Yardage categories, written the way Yahoo asks for them: how many yards make a
+    # point. Yahoo's settings page has no box for 0.1325 a yard -- it asks for 7.5
+    # yards -- so a config that mirrors the interface can be transcribed either way
+    # without anyone doing arithmetic and getting it wrong.
+    yards_per_point: dict[str, float] = Field(default_factory=dict)
     bonuses: dict[str, list[Bonus]] = Field(default_factory=dict)
     custom_rules: CustomRules = Field(default_factory=CustomRules)
 
@@ -79,6 +84,22 @@ class RuleSet(BaseModel):
                 raise ValueError(f"unknown scoring category {key!r}.{suggest(key)}")
             if not stat.supported:
                 raise ValueError(f"{key!r} ({stat.label}) is not scoreable from the store")
+        return value
+
+    @field_validator("yards_per_point")
+    @classmethod
+    def _yardage_categories_only(cls, value: dict[str, float]) -> dict[str, float]:
+        for key, yards in value.items():
+            stat = STAT_BY_KEY.get(key)
+            if stat is None:
+                raise ValueError(f"unknown scoring category {key!r}.{suggest(key)}")
+            if key not in YARDAGE_KEYS:
+                raise ValueError(
+                    f"{key!r} ({stat.label}) isn't measured in yards, so yards-per-point "
+                    f"makes no sense for it. Put it under `scoring`."
+                )
+            if yards <= 0:
+                raise ValueError(f"{key!r}: yards per point must be positive, got {yards}")
         return value
 
     @field_validator("bonuses")
@@ -100,16 +121,30 @@ class RuleSet(BaseModel):
 
     @model_validator(mode="after")
     def _within_yahoo_limits(self) -> "RuleSet":
-        offense = [k for k in self.scoring if STAT_BY_KEY[k].section == "Offense"]
+        clash = set(self.scoring) & set(self.yards_per_point)
+        if clash:
+            raise ValueError(
+                f"{', '.join(sorted(clash))} given both as points-per-yard and "
+                f"yards-per-point; pick one"
+            )
+        offense = [k for k in self.points if STAT_BY_KEY[k].section == "Offense"]
         if len(offense) > MAX_OFFENSE_CATEGORIES:
             raise ValueError(
                 f"{len(offense)} offensive categories enabled; Yahoo caps this at "
                 f"{MAX_OFFENSE_CATEGORIES}"
             )
         for key in self.bonuses:
-            if key not in self.scoring:
+            if key not in self.points:
                 raise ValueError(f"bonus on {key!r} but that category isn't enabled")
         return self
+
+    @property
+    def points(self) -> dict[str, float]:
+        """Every enabled category as points per unit, whichever way it was written."""
+        merged = dict(self.scoring)
+        for key, yards in self.yards_per_point.items():
+            merged[key] = 1.0 / yards
+        return merged
 
     @property
     def starter_count(self) -> int:
@@ -238,7 +273,7 @@ def score_base(line: StatLine, rules: RuleSet) -> float:
     total = 0.0
     is_team_unit = line.position == "DEF"
 
-    for key, multiplier in rules.scoring.items():
+    for key, multiplier in rules.points.items():
         stat = STAT_BY_KEY[key]
         if stat.is_team_defense != is_team_unit:
             continue

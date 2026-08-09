@@ -12,8 +12,10 @@
 extends: flavor.yaml
 name: "... + kicker scored by the yard"
 
+yards_per_point:
+  fg_total_yards: 10
+
 scoring:
-  fg_total_yards: 0.1
   # Off, replaced by the rate above. Kicker totals are unchanged on average.
   fg_made_0_19: null
   fg_made_20_29: null

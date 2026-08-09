@@ -367,3 +367,53 @@ def test_extends_cycles_are_refused(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="cycle"):
         load_ruleset(tmp_path / "a.yaml")
+
+
+# --------------------------------------------------------------- yards per point
+
+
+def test_yards_per_point_matches_points_per_yard() -> None:
+    """Yahoo asks how many yards make a point; both spellings must score identically."""
+    by_rate = RuleSet(name="x", lineup={"starters": ["WR"]}, scoring={"receiving_yards": 0.1})
+    by_yards = RuleSet(
+        name="x", lineup={"starters": ["WR"]}, yards_per_point={"receiving_yards": 10}
+    )
+    line = _line("WR", receiving_yards=137.0)
+    assert score_base(line, by_rate) == pytest.approx(score_base(line, by_yards))
+    assert by_yards.points["receiving_yards"] == pytest.approx(0.1)
+
+
+def test_yards_per_point_rejects_non_yardage_categories() -> None:
+    """Receptions aren't measured in yards, so the unit would be meaningless."""
+    with pytest.raises(ValidationError, match="isn't measured in yards"):
+        RuleSet(name="x", lineup={"starters": ["WR"]}, yards_per_point={"receptions": 10})
+
+
+def test_yards_per_point_must_be_positive() -> None:
+    with pytest.raises(ValidationError, match="must be positive"):
+        RuleSet(name="x", lineup={"starters": ["WR"]}, yards_per_point={"receiving_yards": 0})
+
+
+def test_a_category_cannot_be_given_both_ways() -> None:
+    """Silently preferring one would make the other look applied when it wasn't."""
+    with pytest.raises(ValidationError, match="pick one"):
+        RuleSet(
+            name="x",
+            lineup={"starters": ["WR"]},
+            scoring={"receiving_yards": 0.1},
+            yards_per_point={"receiving_yards": 10},
+        )
+
+
+def test_the_league_configs_use_yahoo_units() -> None:
+    """What the configs say should be transcribable straight into the settings page."""
+    base = load_ruleset(RULES_DIR / "base_yahoo.yaml")
+    assert base.yards_per_point["passing_yards"] == 25
+    assert base.yards_per_point["receiving_yards"] == 10
+
+    balanced = load_ruleset(RULES_DIR / "balanced_qwr.yaml")
+    assert balanced.yards_per_point["receiving_yards"] == 7.5
+    assert balanced.yards_per_point["rushing_yards"] == 8
+    # Fewer yards per point is more points per yard, so these really are increases.
+    assert balanced.points["receiving_yards"] > base.points["receiving_yards"]
+    assert balanced.points["rushing_yards"] > base.points["rushing_yards"]

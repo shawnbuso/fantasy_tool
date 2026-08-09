@@ -110,6 +110,8 @@ def validate(
     table = Table("Category", "Yahoo label", "Value")
     for key, value in ruleset.scoring.items():
         table.add_row(key, STAT_BY_KEY[key].label, f"{value:g}")
+    for key, yards in ruleset.yards_per_point.items():
+        table.add_row(key, STAT_BY_KEY[key].label, f"{yards:g} yards = 1 point")
     console.print(table)
 
     for key, bonuses in ruleset.bonuses.items():
@@ -454,14 +456,12 @@ def balance(
             )
         console.print(f"  Everyone lands at [bold]{solution.target:.1f}[/bold] points per game.")
         for lever, delta in solution.increments.items():
-            current = variant.scoring.get(lever, 0.0)
-            per_point = 1 / (current + delta) if current + delta else 0
-            console.print(
-                f"    {lever}: {current:g} -> [bold]{current + delta:.4g}[/bold]"
-                f"  (1 point per {per_point:.1f} yards)"
-            )
+            current = variant.points.get(lever, 0.0)
+            was = 1 / current if current else 0
+            now = 1 / (current + delta) if current + delta else 0
+            console.print(f"    {lever}: [bold]{now:.4g} yards = 1 point[/bold]  (was {was:.4g})")
         for position, (stat, rate) in solution.premiums.items():
-            shared = variant.scoring.get(stat, 0.0) + solution.increments.get(stat, 0.0)
+            shared = variant.points.get(stat, 0.0) + solution.increments.get(stat, 0.0)
             console.print(
                 f"    {position} premium on {stat}: [bold]+{rate:.4g}[/bold] "
                 f"(so {position} scores {shared + rate:.4g} a unit vs {shared:.4g} for others)"

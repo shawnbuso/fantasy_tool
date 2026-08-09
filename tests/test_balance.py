@@ -199,12 +199,12 @@ def test_only_flex_competitors_need_balancing(superflex) -> None:
 def test_the_recommended_setup_needs_no_custom_rules() -> None:
     balanced = load_ruleset(RULES_DIR / "balanced_qwr.yaml")
     assert not balanced.custom_rules.enabled
-    assert balanced.scoring["receptions"] == 1.0
+    assert balanced.points["receptions"] == 1.0
     # Every change is an increase on Yahoo's defaults.
     base = load_ruleset(RULES_DIR / "base_yahoo.yaml")
-    for key, value in base.scoring.items():
-        if key in balanced.scoring:
-            assert balanced.scoring[key] >= value, key
+    for key, value in base.points.items():
+        if key in balanced.points:
+            assert balanced.points[key] >= value - 1e-9, key
     # Tight end has a slot of its own and shares none.
     from fantasy_tool.model import parse_slots
 
