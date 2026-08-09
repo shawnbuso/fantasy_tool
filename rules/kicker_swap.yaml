@@ -1,0 +1,22 @@
+# Kicker scoring by the yard instead of by bucket.
+#
+# Yahoo's "Field Goal Yards Per Point", new for 2026. Swaps the five distance buckets
+# for one rate. Measured over 2019-2024 this is revenue-neutral at 1 point per 10.5
+# yards -- the buckets already pay a near-constant 0.087 to 0.092 points a yard from
+# 30 out, so this is the same scoring without the steps.
+#
+# 1 point per 10 yards is the round version, and runs about 0.3 points a game above
+# the buckets. What changes is the shape, not the size: a 49-yarder finally beats a
+# 40-yarder, where today they pay identically.
+
+extends: flavor.yaml
+name: "... + kicker scored by the yard"
+
+scoring:
+  fg_total_yards: 0.1
+  # Off, replaced by the rate above. Kicker totals are unchanged on average.
+  fg_made_0_19: null
+  fg_made_20_29: null
+  fg_made_30_39: null
+  fg_made_40_49: null
+  fg_made_50_: null

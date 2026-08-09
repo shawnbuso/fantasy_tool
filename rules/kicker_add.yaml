@@ -1,0 +1,9 @@
+# Yards-per-point layered ON TOP of the existing distance buckets, rather than
+# replacing them. Nothing is switched off, so nothing is reduced -- but kickers score
+# considerably more, and swing considerably more with it.
+
+extends: flavor.yaml
+name: "... + yards-per-point on top of the buckets"
+
+scoring:
+  fg_total_yards: 0.05
