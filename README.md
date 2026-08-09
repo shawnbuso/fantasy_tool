@@ -53,6 +53,37 @@ every team's kicker moves every score enormously and changes no result. The tool
 measures that correctly as no swing at all, and there's a test for it, because
 "generous participation bonus" is a shape real house rules take.
 
+## Finding a magnitude
+
+Knowing a rule is too swingy is half an answer. `sweep` gives the other half, running
+the same leagues across a range of values so the number is chosen from evidence:
+
+```bash
+uv run fantasy-tool sweep --base rules/base_yahoo.yaml --candidate rules/house_2026.yaml \
+    --param "def_blowout_penalty.penalty=-4,-8,-12,-20,-40"
+```
+
+```
+Setting        Fires  Avg pts  vs margin  Decides  Flips games  Verdict
+penalty=-4      4.1%     +4.0       0.2x     8.2%         0.3%  FLAVOR
+penalty=-8      4.1%     +8.0       0.3x    16.3%         0.7%  SPICY
+penalty=-12     4.1%    +12.0       0.5x    24.6%         1.0%  SPICY
+penalty=-20     4.1%    +20.0       0.8x    38.7%         1.6%  HIGH SWING
+penalty=-40     4.1%    +40.0       1.6x    67.6%         2.6%  AUTO-DECIDE
+```
+
+Repeat `--param` to sweep a grid — magnitude against rarity is the usual pair, since
+a rule has two independent dials: what it's worth when it fires, and how often it
+fires at all.
+
+Leagues are generated once and reused across every setting, so rows are directly
+comparable and a sweep costs little more than a single evaluation. When a single
+parameter is swept the flip rate should move monotonically with it; if it doesn't,
+noise is beating signal and the tool says so rather than letting you rank on it.
+
+If *every* setting decides games, the sweep says so and recommends nothing. That is
+the honest answer: the rule needs rethinking, not tuning.
+
 ## How the simulation is calibrated
 
 A simulator that runs cleanly but produces a league behaving nothing like real fantasy

@@ -232,29 +232,26 @@ def evaluate(
     runs share a draft, a schedule, and lineups and the only difference is the rules.
     """
     from .analysis import compare
+    from .harness import build_leagues, run_pairs, skills
     from .report import render
     from .scoring import load_ruleset
-    from .sim import simulate
-    from .sources.synthetic import build_pool, generate
 
     baseline_rules = load_ruleset(base)
     candidate_rules = load_ruleset(candidate)
-    wanted = _parse_seasons(seasons)
 
-    pairs = []
-    skills = []
     with console.status("Simulating...") as status:
-        for season in wanted:
-            status.update(f"Season {season}: building player pool...")
-            pool = build_pool(season, baseline_rules, root=root, teams=teams)
-            for index in range(leagues):
-                status.update(f"Season {season}: league {index + 1} of {leagues}...")
-                # Generated from the baseline so lineups are identical across both runs.
-                league = generate(pool, seed + index, baseline_rules, n_teams=teams)
-                pairs.append((simulate(league, baseline_rules), simulate(league, candidate_rules)))
-                skills.append(league.meta["skill"])
+        built = build_leagues(
+            _parse_seasons(seasons),
+            baseline_rules,
+            leagues=leagues,
+            seed=seed,
+            teams=teams,
+            root=root,
+            progress=status.update,
+        )
+        pairs = run_pairs(built, baseline_rules, candidate_rules)
 
-    analysis = compare(pairs, baseline_rules, candidate_rules, skills)
+    analysis = compare(pairs, baseline_rules, candidate_rules, skills(built))
     render(analysis, console, baseline=baseline_rules.name, candidate=candidate_rules.name)
 
     if csv:
@@ -297,6 +294,75 @@ def evaluate(
                     ]
                 )
         console.print(f"\n[dim]Wrote {len(rows):,} matchup rows to {csv}[/dim]")
+
+
+@app.command()
+def sweep(
+    base: Annotated[Path, typer.Option(help="Baseline rule set")],
+    candidate: Annotated[Path, typer.Option(help="Candidate rule set to tune")],
+    param: Annotated[
+        list[str],
+        typer.Option(help="rule.param=v1,v2,v3 -- repeat the flag to sweep a grid"),
+    ],
+    seasons: Annotated[str, typer.Option(help="e.g. 2019-2024")] = "2019-2024",
+    leagues: Annotated[int, typer.Option(help="Synthetic leagues per season")] = 20,
+    seed: Annotated[int, typer.Option(help="Base seed; leagues vary from it")] = 7,
+    teams: Annotated[int, typer.Option(help="League size")] = 10,
+    root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
+) -> None:
+    """Try a range of values for a rule's parameters and report how each one lands.
+
+    Knowing a rule is too swingy is half an answer; this gives the other half. Every
+    setting is measured against the same leagues, so the rows are directly comparable.
+    """
+    from . import sweep as sweep_module
+    from .harness import build_leagues, skills
+    from .report import render_sweep
+    from .scoring import load_ruleset
+
+    baseline_rules = load_ruleset(base)
+    candidate_rules = load_ruleset(candidate)
+    if not candidate_rules.custom_rules.enabled:
+        console.print(f"[red]{candidate} enables no custom rules, so there's nothing to sweep.")
+        raise typer.Exit(1)
+
+    try:
+        for spec in param:
+            sweep_module.parse_spec(spec)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    with console.status("Building leagues...") as status:
+        built = build_leagues(
+            _parse_seasons(seasons),
+            baseline_rules,
+            leagues=leagues,
+            seed=seed,
+            teams=teams,
+            root=root,
+            progress=status.update,
+        )
+        try:
+            points = sweep_module.run(
+                built,
+                baseline_rules,
+                candidate_rules,
+                param,
+                skills=skills(built),
+                progress=status.update,
+            )
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1) from exc
+
+    render_sweep(
+        points,
+        console,
+        candidate=candidate_rules.name,
+        monotonic=sweep_module.is_monotonic(points),
+        best=sweep_module.recommend(points),
+    )
 
 
 @app.command()

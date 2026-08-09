@@ -53,6 +53,64 @@ def render(analysis: Analysis, console: Console, *, baseline: str, candidate: st
     _winners(analysis, console)
 
 
+def render_sweep(points, console: Console, *, candidate: str, monotonic: bool, best) -> None:
+    """One row per parameter setting, so a magnitude can be picked from evidence."""
+    if not points:
+        return
+    first = points[0].analysis
+    console.print()
+    console.print(f"[bold]{candidate}[/bold] - parameter sweep")
+    console.print(
+        f"[dim]{first.league_seasons} league-seasons - {first.matchups:,} matchups "
+        f"per setting - baseline margin {first.median_margin:.1f} points[/dim]"
+    )
+    console.print()
+
+    table = Table(box=None, pad_edge=False)
+    table.add_column("Setting")
+    table.add_column("Fires", justify="right")
+    table.add_column("Avg pts", justify="right")
+    table.add_column("vs margin", justify="right")
+    table.add_column("Decides", justify="right")
+    table.add_column("Flips games", justify="right")
+    table.add_column("Verdict")
+
+    for point in points:
+        impact = point.impact
+        style = VERDICT_STYLE.get(impact.verdict, "")
+        marker = " [bold green]<-[/bold green]" if best is not None and point is best else ""
+        table.add_row(
+            point.label + marker,
+            _pct(impact.fired),
+            f"{impact.mean_when_fired:+.1f}",
+            _swing_ratio(impact, point.analysis.median_margin),
+            _pct(impact.decisive),
+            _pct(impact.flips, with_interval=True),
+            f"[{style}] {impact.verdict} [/{style}]" if style else impact.verdict,
+        )
+    console.print(table)
+
+    console.print()
+    if best is None:
+        console.print(
+            "[bold red]Every setting tested decides games.[/bold red] This rule needs "
+            "rethinking rather than tuning -- try a smaller effect, a cap, or a "
+            "trigger that fires less often."
+        )
+    else:
+        console.print(
+            f"[bold green]Strongest setting that doesn't decide games: "
+            f"{best.label}[/bold green] ({best.impact.verdict})."
+        )
+
+    if not monotonic:
+        console.print(
+            "[yellow]The flip rate isn't moving consistently with the setting, which "
+            "means noise is swamping the signal. Re-run with more --leagues before "
+            "reading a ranking off this.[/yellow]"
+        )
+
+
 def _verdicts(analysis: Analysis, console: Console) -> None:
     flagged = [r for r in analysis.per_rule if r.verdict in ("AUTO-DECIDE", "LOTTERY TICKET")]
     if not flagged:
