@@ -321,12 +321,49 @@ def test_extends_merges_and_overrides(tmp_path: Path) -> None:
     assert child.lineup.starters == ["QB", "K"]
 
 
-def test_extends_is_one_level_only(tmp_path: Path) -> None:
+def test_extends_chains_apply_root_first(tmp_path: Path) -> None:
+    """Base to superflex to balanced is a natural way to build variants up."""
+    (tmp_path / "base.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "base",
+                "lineup": {"starters": ["QB", "RB"], "bench": 6},
+                "scoring": {"passing_tds": 4, "receptions": 0.5, "rushing_yards": 0.1},
+            }
+        )
+    )
+    (tmp_path / "middle.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "extends": "base.yaml",
+                "name": "middle",
+                "lineup": {"starters": ["QB", "RB", "WR"], "bench": 6},
+            }
+        )
+    )
+    (tmp_path / "leaf.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "extends": "middle.yaml",
+                "name": "leaf",
+                "scoring": {"receptions": 1.0},
+            }
+        )
+    )
+
+    leaf = load_ruleset(tmp_path / "leaf.yaml")
+    assert leaf.name == "leaf"
+    assert leaf.lineup.starters == ["QB", "RB", "WR"]  # from the middle
+    assert leaf.scoring["passing_tds"] == 4  # from the root
+    assert leaf.scoring["receptions"] == 1.0  # the leaf wins
+
+
+def test_extends_cycles_are_refused(tmp_path: Path) -> None:
     (tmp_path / "a.yaml").write_text(
         yaml.safe_dump({"extends": "b.yaml", "name": "a", "lineup": {"starters": ["QB"]}})
     )
     (tmp_path / "b.yaml").write_text(
-        yaml.safe_dump({"extends": "c.yaml", "name": "b", "lineup": {"starters": ["QB"]}})
+        yaml.safe_dump({"extends": "a.yaml", "name": "b", "lineup": {"starters": ["QB"]}})
     )
-    with pytest.raises(ValueError, match="only one level"):
+    with pytest.raises(ValueError, match="cycle"):
         load_ruleset(tmp_path / "a.yaml")

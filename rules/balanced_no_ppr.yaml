@@ -1,0 +1,24 @@
+# Superflex, with positions balanced so the average QB, RB, WR and TE are worth the
+# same per game. Solved by `fantasy-tool balance`; see the README for the method.
+#
+# Only increases: nothing below is lower than Yahoo's default. Quarterbacks score the
+# most and can't be reduced, so they set the target the other three climb to.
+#
+# The tight end premium is a custom rule because Yahoo cannot do it. Its categories
+# apply to every player alike, and tight ends are out-produced by receivers on every
+# per-game receiving stat -- so raising a shared category helps receivers more and
+# widens the gap rather than closing it.
+
+extends: superflex.yaml
+name: "Balanced superflex -- 0 PPR"
+
+scoring:
+  receptions: 0
+  receiving_yards: 0.2123   # was 0.1
+  rushing_yards: 0.1456    # was 0.1
+
+custom_rules:
+  modules: [house_2026.py]
+  enabled:
+    position_premium:
+      TE_receiving_yards: 0.1409

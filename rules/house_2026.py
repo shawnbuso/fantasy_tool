@@ -59,6 +59,27 @@ def underdog_boost(ctx: RuleContext) -> float:
     return min(boost, ctx.param("cap", 15.0))
 
 
+@rule("position_premium")
+def position_premium(ctx: RuleContext) -> float:
+    """Extra points on a stat, for one position only.
+
+    The one thing Yahoo genuinely cannot express: its categories apply to every player
+    alike, so there is no way to pay a tight end more per catch than a receiver. That
+    matters because tight ends are out-produced by receivers on every per-game
+    receiving stat, so no shared category can close the gap between them -- raising
+    receiving yards for everyone helps receivers more and widens it.
+
+    Parameters are `<POSITION>_<stat>`, e.g. `TE_receiving_yards: 0.16` adds 0.16 a
+    yard for tight ends on top of whatever the shared category pays.
+    """
+    total = 0.0
+    for key, rate in ctx.params.items():
+        position, _, stat = key.partition("_")
+        if position == ctx.line.position and stat:
+            total += float(rate) * ctx.line.s(stat)
+    return total
+
+
 @rule("hot_hand", positions=["QB", "RB", "WR", "TE"])
 def hot_hand(ctx: RuleContext) -> float:
     """Flat bonus for a player on a scoring streak.

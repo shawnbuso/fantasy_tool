@@ -28,6 +28,13 @@ Z_95 = 1.959963985
 NEGLIGIBLE = 1e-9
 
 
+def _sign(value: float) -> int:
+    """-1, 0 or 1, treating anything below the tolerance as a tie."""
+    if abs(value) <= NEGLIGIBLE:
+        return 0
+    return 1 if value > 0 else -1
+
+
 # --------------------------------------------------------------------- stats
 
 
@@ -123,12 +130,14 @@ class MatchupDiff:
 
     @property
     def flipped(self) -> bool:
-        """Did the winner change? Ties are a third state, never silently a win."""
+        """Did the winner change? Ties are a third state, never silently a win.
 
-        def sign(value: float) -> int:
-            return (value > 0) - (value < 0)
-
-        return sign(self.margin_base) != sign(self.margin_candidate)
+        The comparison is tolerant, because nobody wins a fantasy matchup by 1e-14.
+        Summing a lineup in floating point leaves dust, and a strict sign test reads a
+        genuine tie broken by that dust as a flipped result -- inflating the flip rate
+        on precisely the closest games, which are the ones a rule gets blamed for.
+        """
+        return _sign(self.margin_base) != _sign(self.margin_candidate)
 
     @property
     def decisive(self) -> bool:
@@ -269,11 +278,7 @@ def _impact(
 
 def _would_flip(diff: MatchupDiff, swing: float) -> bool:
     """Whether this rule alone would have changed the winner."""
-
-    def sign(value: float) -> int:
-        return (value > 0) - (value < 0)
-
-    return sign(diff.margin_base) != sign(diff.margin_base + swing)
+    return _sign(diff.margin_base) != _sign(diff.margin_base + swing)
 
 
 def _all_play(result: SeasonResult) -> dict[str, float]:

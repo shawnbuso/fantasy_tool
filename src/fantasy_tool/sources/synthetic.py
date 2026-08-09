@@ -27,7 +27,7 @@ from ..model import (
     StatLine,
     parse_slots,
 )
-from ..scoring import RuleSet, score_base
+from ..scoring import RuleSet, score_standalone
 from ..store import DEFAULT_ROOT, load_statlines
 
 DEFAULT_TEAMS = 10
@@ -107,7 +107,9 @@ def _flex_demand(
     for position in eligible:
         ranked = sorted(values.get(position, []), reverse=True)
         # The dedicated starters are already spoken for; the flex picks from the rest.
-        contenders.extend((value, position) for value in ranked[teams * dedicated.get(position, 0):])
+        contenders.extend(
+            (value, position) for value in ranked[teams * dedicated.get(position, 0) :]
+        )
 
     contenders.sort(reverse=True)
     won: dict[str, int] = {}
@@ -126,9 +128,7 @@ def roster_plan(slots, values: dict[str, list[float]] | None = None, teams: int 
     else:
         # No values to go on: fall back to an equal split of the flex slots.
         share = {
-            position: sum(
-                1 / len(slot.eligible) for slot in flex if position in slot.eligible
-            )
+            position: sum(1 / len(slot.eligible) for slot in flex if position in slot.eligible)
             for position in positions
         }
 
@@ -188,7 +188,12 @@ class Pool:
 
 
 def _season_points(lines: dict[tuple[str, int], StatLine], rules: RuleSet) -> dict:
-    return {key: score_base(line, rules) for key, line in lines.items()}
+    """Value every line the way a manager would: on the player's own merits.
+
+    Custom rules count here, or managers would draft and start players in ignorance of
+    scoring their own league uses.
+    """
+    return {key: score_standalone(line, rules) for key, line in lines.items()}
 
 
 def build_pool(

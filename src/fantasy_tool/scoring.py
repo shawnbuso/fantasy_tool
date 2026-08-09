@@ -119,9 +119,10 @@ class RuleSet(BaseModel):
 def _merge(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     """Shallow merge, one level deep. `scoring` and `bonuses` merge key by key.
 
-    Deliberately not recursive: a candidate rule set should be readable as "the base,
-    plus these specific changes", and deep-merge semantics make that harder to reason
-    about than they're worth. To turn a category off, set it to null.
+    Deliberately not recursive *within* a section: a rule set should read as "the one
+    it extends, plus these specific changes", and deep-merge semantics make that
+    harder to reason about than they're worth. To turn a category off, set it to null.
+    Sections other than those two are replaced wholesale.
     """
     merged = dict(parent)
     for section, value in child.items():
@@ -134,27 +135,46 @@ def _merge(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+MAX_EXTENDS_DEPTH = 10
+
+
 def load_ruleset(path: str | Path) -> RuleSet:
     """Read a rule set, resolving `extends:` and importing any custom rule modules.
 
-    Module paths are relative to the YAML file, not the working directory, so a rule
-    set stays valid however it's invoked.
+    Chains are allowed -- base to superflex to balanced is a natural way to build up
+    variants -- and are applied root first so the most derived file wins.
+
+    Module paths are relative to the file that declared them, not the working
+    directory, so a rule set stays valid however it's invoked.
     """
     path = Path(path).resolve()
-    data = yaml.safe_load(path.read_text()) or {}
 
-    parent_ref = data.pop("extends", None)
-    if parent_ref:
-        parent_path = (path.parent / parent_ref).resolve()
-        parent = yaml.safe_load(parent_path.read_text()) or {}
-        if "extends" in parent:
-            raise ValueError(f"{parent_path} itself extends another file; only one level")
-        data = _merge(parent, data)
+    chain: list[tuple[Path, dict[str, Any]]] = []
+    seen: set[Path] = set()
+    current: Path | None = path
+    while current is not None:
+        if current in seen:
+            raise ValueError(f"{current.name} extends itself, directly or in a cycle")
+        if len(chain) >= MAX_EXTENDS_DEPTH:
+            raise ValueError(f"{path.name}: extends chain deeper than {MAX_EXTENDS_DEPTH}")
+        seen.add(current)
+        data = yaml.safe_load(current.read_text()) or {}
+        parent_ref = data.pop("extends", None)
+        chain.append((current, data))
+        current = (current.parent / parent_ref).resolve() if parent_ref else None
 
-    ruleset = RuleSet(**data)
+    merged: dict[str, Any] = {}
+    modules_from = path
+    for source, data in reversed(chain):
+        if "custom_rules" in data:
+            # Replaced wholesale, so the last file to declare it owns the paths.
+            modules_from = source
+        merged = _merge(merged, data)
+
+    ruleset = RuleSet(**merged)
 
     if ruleset.custom_rules.modules:
-        rules.load_modules(path.parent / module for module in ruleset.custom_rules.modules)
+        rules.load_modules(modules_from.parent / module for module in ruleset.custom_rules.modules)
 
     known = rules.registered()
     unknown = [name for name in ruleset.custom_rules.enabled if name not in known]
@@ -176,6 +196,34 @@ def _yardage_points(raw: float, options: Options) -> float:
         # Whole points only. Truncates toward zero, so -1.8 becomes -1.
         return float(math.trunc(raw))
     return raw
+
+
+def score_standalone(line: StatLine, rules: RuleSet) -> float:
+    """What a player is worth judged on his own, custom rules included.
+
+    Used for draft valuation and weekly projections, where the question is "how good
+    is this player" rather than "what happened in this matchup". Rules that depend on
+    the rest of the league -- standings, opponents, teammates -- see an empty context
+    and contribute nothing, which is the right approximation: they describe situations,
+    not players.
+
+    Scoring valuation with `score_base` instead would leave managers ignorant of any
+    custom rule. A tight end premium would then go unnoticed by every manager in the
+    league, and the position it was written to promote would stay on the bench.
+    """
+    base = score_base(line, rules)
+    enabled = rules.custom_rules.enabled
+    if not enabled:
+        return base
+
+    from .model import History, TeamWeek
+    from .rules import RuleContext, evaluate
+
+    empty = TeamWeek(team="", week=line.week, scored=())
+    context = RuleContext(
+        line=line, base=base, params={}, team=empty, opponent=empty, history=History()
+    )
+    return base + sum(evaluate(context, enabled).values())
 
 
 def score_base(line: StatLine, rules: RuleSet) -> float:

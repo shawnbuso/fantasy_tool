@@ -366,6 +366,90 @@ def sweep(
 
 
 @app.command()
+def balance(
+    rules: Annotated[Path, typer.Option(help="Rule set whose lineup and scoring to measure")],
+    seasons: Annotated[str, typer.Option(help="e.g. 2019-2024")] = "2019-2024",
+    ppr: Annotated[str, typer.Option(help="Reception values to compare")] = "0,0.5,1.0",
+    teams: Annotated[int, typer.Option(help="League size")] = 10,
+    levers: Annotated[
+        str, typer.Option(help="Yahoo categories to raise")
+    ] = "receiving_yards,rushing_yards",
+    premium: Annotated[
+        str, typer.Option(help="POSITION.stat scored for that position only")
+    ] = "TE.receiving_yards",
+    root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
+) -> None:
+    """Measure whether positions are worth the same, and solve for increases that even them.
+
+    Raw points per game of the startable players at each position, which is what a
+    manager compares when filling a flex slot.
+    """
+    from .balance import FLEX_POSITIONS, profile, solve, startable_pool
+    from .scoring import load_ruleset
+
+    ruleset = load_ruleset(rules)
+    wanted = _parse_seasons(seasons)
+    lever_names = [name.strip() for name in levers.split(",") if name.strip()]
+    premium_pair = None
+    if premium and premium.lower() != "none":
+        position, _, stat = premium.partition(".")
+        premium_pair = (position.strip().upper(), stat.strip())
+
+    stats = sorted({*lever_names, *([premium_pair[1]] if premium_pair else [])})
+    pool = startable_pool(teams)
+
+    table = Table(title=f"Points per game, top {pool} at each position", title_justify="left")
+    table.add_column("Receptions")
+    for position in FLEX_POSITIONS:
+        table.add_column(position, justify="right")
+    table.add_column("Spread", justify="right")
+
+    solutions = {}
+    for value in (float(v) for v in ppr.split(",")):
+        variant = ruleset.model_copy(update={"scoring": {**ruleset.scoring, "receptions": value}})
+        with console.status(f"Profiling at {value:g} PPR..."):
+            profiles = profile(wanted, variant, stats, top_n=pool, root=root)
+        means = {p: profiles[p].mean_points for p in FLEX_POSITIONS if p in profiles}
+        table.add_row(
+            f"{value:g}",
+            *[f"{means[p]:.1f}" for p in FLEX_POSITIONS],
+            f"{max(means.values()) - min(means.values()):.1f}",
+        )
+        solutions[value] = (variant, profiles, solve(profiles, lever_names, premium_pair))
+
+    console.print(table)
+
+    for value, (variant, profiles, solution) in solutions.items():
+        console.print()
+        console.print(f"[bold]At {value:g} points per reception[/bold]")
+        if solution is None:
+            console.print(
+                "  [red]No solution.[/red] There must be exactly one lever per position "
+                "being lifted; add or remove one."
+            )
+            continue
+        if not solution.feasible:
+            console.print(
+                "  [yellow]Needs a reduction somewhere, so it can't be done with "
+                "increases alone.[/yellow] Negative values below show what it would take."
+            )
+        console.print(f"  Everyone lands at [bold]{solution.target:.1f}[/bold] points per game.")
+        for lever, delta in solution.increments.items():
+            current = variant.scoring.get(lever, 0.0)
+            per_point = 1 / (current + delta) if current + delta else 0
+            console.print(
+                f"    {lever}: {current:g} -> [bold]{current + delta:.4g}[/bold]"
+                f"  (1 point per {per_point:.1f} yards)"
+            )
+        for position, (stat, rate) in solution.premiums.items():
+            shared = variant.scoring.get(stat, 0.0) + solution.increments.get(stat, 0.0)
+            console.print(
+                f"    {position} premium on {stat}: [bold]+{rate:.4g}[/bold] "
+                f"(so {position} scores {shared + rate:.4g} a unit vs {shared:.4g} for others)"
+            )
+
+
+@app.command()
 def info(
     root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
 ) -> None:

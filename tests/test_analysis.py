@@ -85,12 +85,16 @@ def test_null_rule_changes_nothing_at_all(leagues, baseline) -> None:
     rules_mod.clear_registry()
 
 
-def test_constant_rule_flips_nothing(leagues, baseline) -> None:
-    """A rule paying every starter equally must not change a single result.
+def test_constant_rule_pays_every_starter_equally(leagues, baseline) -> None:
+    """A rule paying every starter a flat amount, and what that does and doesn't do.
 
-    Both sides gain the same amount, so margins are untouched. This catches asymmetry
-    bugs -- crediting the home team twice, or applying a rule to only one side of a
-    matchup -- that a null rule cannot.
+    It catches asymmetry bugs a null rule can't -- crediting the home team twice, or
+    applying a rule to one side of a matchup only.
+
+    It is *not* quite neutral, and the reason is worth keeping: a per-starter bonus
+    pays a full lineup more than one with an empty slot, so the rare matchup between
+    unequally-filled lineups does move. Anywhere both teams fielded the same number of
+    starters, the margin must be untouched to the last decimal.
     """
 
     @rule("five_for_everyone")
@@ -101,22 +105,30 @@ def test_constant_rule_flips_nothing(leagues, baseline) -> None:
     pairs = _run(leagues, baseline, candidate)
     analysis = compare(pairs, baseline, candidate)
 
+    filled_by: dict[tuple[str, str, int], int] = {}
     for league, (base, cand) in zip(leagues, pairs, strict=True):
         for team in base.settings.teams:
-            # Count slots that actually held a player: an unfilled slot has nobody to
-            # pay, so no rule fires there.
-            filled = sum(
-                1
-                for week in league.settings.weeks
-                for player_id in league.lineups[(team, week)]
-                if player_id
-            )
+            total = 0
+            for week in league.settings.weeks:
+                count = sum(1 for player_id in league.lineups[(team, week)] if player_id)
+                filled_by[(league.key, team, week)] = count
+                total += count
             gained = cand.standings[team].points_for - base.standings[team].points_for
-            assert gained == pytest.approx(5.0 * filled)
-            assert cand.standings[team].wins == base.standings[team].wins
+            assert gained == pytest.approx(5.0 * total)
 
-    assert analysis.overall.flips.successes == 0
-    assert analysis.overall.decisive.successes == 0
+    equal, moved = 0, 0
+    for diff in (d for pair in pairs for d in diff_season(*pair)):
+        home = filled_by[(diff.league_key, diff.home, diff.week)]
+        away = filled_by[(diff.league_key, diff.away, diff.week)]
+        if home == away:
+            equal += 1
+            assert diff.swing == pytest.approx(0.0, abs=1e-9)
+            assert not diff.flipped
+        elif diff.swing:
+            moved += 1
+            assert abs(diff.swing) == pytest.approx(5.0 * abs(home - away))
+
+    assert equal > 0.9 * (equal + moved), "lineups should almost always be full"
     assert analysis.overall.fired.rate == 1.0
 
     rules_mod.clear_registry()
