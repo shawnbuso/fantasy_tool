@@ -1,0 +1,17 @@
+# Superflex roster experiment.
+#
+# One dedicated slot at each offensive position, plus four slots any of QB/RB/WR/TE
+# can fill. Kicker and defense are unchanged -- they aren't offensive positions and
+# aren't flex-eligible.
+#
+# Scoring is untouched here on purpose. This file isolates the roster change so its
+# effect can be read on its own; the point-value rebalancing lives in the balanced_*
+# files. Note that changing lineup slots means lineups have to be re-derived, so a
+# comparison against the baseline is not a clean counterfactual and the report says so.
+
+extends: base_yahoo.yaml
+name: "Superflex -- 4 flex slots, scoring unchanged"
+
+lineup:
+  starters: [QB, RB, WR, TE, "Q/W/R/T", "Q/W/R/T", "Q/W/R/T", "Q/W/R/T", K, DEF]
+  bench: 6

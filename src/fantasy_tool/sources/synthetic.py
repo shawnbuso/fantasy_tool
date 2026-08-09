@@ -54,25 +54,99 @@ STREAM_FORM_WEEKS = 3
 
 STREAMED_POSITIONS = ("K", "DEF")
 
-# Rough starting demand per team, used to locate replacement level per position.
-POSITION_DEMAND = {"QB": 1.6, "RB": 3.2, "WR": 3.6, "TE": 1.4, "K": 1.0, "DEF": 1.0}
+SCORING_POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
 
 # How deep the draftable pool runs, as a multiple of what the league needs. A real
 # draft board is a couple of hundred names, not everyone who ever took a snap; without
 # this, teams fill their benches with players who never see the field and then start
 # them, which drags scores down and widens margins.
 POOL_DEPTH = 2.5
-# One kicker and one defense each: both are streamed weekly from here on, so a second
-# would simply sit off-roster.
-MAX_AT_POSITION = {"QB": 2, "RB": 6, "WR": 6, "TE": 2, "K": 1, "DEF": 1}
 
-# Real fantasy rosters are near-uniform in shape: a backup quarterback and tight end,
-# and four or more of each of the flex-eligible positions. Left to itself the draft
-# produces lopsided rosters -- seven receivers and two running backs -- that then
-# can't field a legal lineup on a bye week. Between the floors and the caps almost
-# every roster slot is spoken for, which is realistic; the interesting variation
-# between managers is *which* players they get, not how many of each position.
-DEPTH_FLOOR = {"QB": 2, "RB": 4, "WR": 4, "TE": 2}
+
+@dataclass(frozen=True, slots=True)
+class RosterPlan:
+    """How many of each position a roster wants, derived from the lineup.
+
+    Hardcoding this would silently break the moment the lineup changes, which is the
+    whole point of the tool. A superflex league wants five quarterbacks where a
+    standard one wants two, and a draft capped at two would simply fail to fill the
+    lineup while looking like it worked.
+    """
+
+    demand: dict[str, float]  # expected starters per team, for replacement level
+    floor: dict[str, int]  # must draft at least this many
+    cap: dict[str, int]  # no point drafting more
+
+
+def lineup_shape(slots) -> tuple[dict[str, int], list]:
+    """Split a lineup into dedicated slots per position and the flex slots."""
+    dedicated: dict[str, int] = {}
+    flex = []
+    for slot in slots:
+        if slot.is_flex:
+            flex.append(slot)
+        else:
+            position = next(iter(slot.eligible))
+            dedicated[position] = dedicated.get(position, 0) + 1
+    return dedicated, flex
+
+
+def _flex_demand(
+    values: dict[str, list[float]], dedicated: dict[str, int], flex, teams: int
+) -> dict[str, float]:
+    """How the flex slots actually get divided up, by value rather than by assumption.
+
+    Assuming each eligible position wins an equal share would be describing the goal
+    of a balanced league rather than the league in front of us. Under ordinary scoring
+    quarterbacks win superflex slots outright, and pretending otherwise puts
+    replacement level for the other positions far too deep -- which inflates their
+    value over replacement and drafts rosters carrying six tight ends.
+    """
+    eligible = {position for slot in flex for position in slot.eligible}
+    contenders: list[tuple[float, str]] = []
+    for position in eligible:
+        ranked = sorted(values.get(position, []), reverse=True)
+        # The dedicated starters are already spoken for; the flex picks from the rest.
+        contenders.extend((value, position) for value in ranked[teams * dedicated.get(position, 0):])
+
+    contenders.sort(reverse=True)
+    won: dict[str, int] = {}
+    for _, position in contenders[: teams * len(flex)]:
+        won[position] = won.get(position, 0) + 1
+    return {position: won.get(position, 0) / teams for position in eligible}
+
+
+def roster_plan(slots, values: dict[str, list[float]] | None = None, teams: int = DEFAULT_TEAMS):
+    """How many of each position to draft, given the lineup and what players are worth."""
+    dedicated, flex = lineup_shape(slots)
+    positions = set(dedicated) | {p for slot in flex for p in slot.eligible}
+
+    if values:
+        share = _flex_demand(values, dedicated, flex, teams)
+    else:
+        # No values to go on: fall back to an equal split of the flex slots.
+        share = {
+            position: sum(
+                1 / len(slot.eligible) for slot in flex if position in slot.eligible
+            )
+            for position in positions
+        }
+
+    demand, floor, cap = {}, {}, {}
+    for position in positions:
+        fixed = dedicated.get(position, 0)
+        eligible_flex = [slot for slot in flex if position in slot.eligible]
+        demand[position] = fixed + share.get(position, 0.0)
+
+        if position in STREAMED_POSITIONS:
+            # Streamed weekly, so a second one would just sit on the bench.
+            floor[position] = cap[position] = fixed
+        else:
+            # A backup at every dedicated position, or a bye empties the slot.
+            floor[position] = fixed + 1
+            reachable = fixed + len(eligible_flex) + (2 if eligible_flex else 0)
+            cap[position] = max(floor[position], reachable)
+    return RosterPlan(demand, floor, cap)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +177,7 @@ class Pool:
     # Spread of draft value and of weekly production, used to scale manager error.
     value_spread: float
     weekly_spread: float
+    plan: RosterPlan
 
     def by_position(self, position: str) -> tuple[Player, ...]:
         return tuple(p for p in self.players if p.position == position)
@@ -155,10 +230,18 @@ def build_pool(
         value = sum(games) / len(games) if games else 0.0
         players.append(Player(player_id, meta.name, meta.position, value))
 
+    # How the lineup divides up, measured against what players are actually worth
+    # under these rules rather than assumed.
+    by_position: dict[str, list[float]] = {}
+    for player in players:
+        if player.value > 0:
+            by_position.setdefault(player.position, []).append(player.value)
+    plan = roster_plan(parse_slots(rules.lineup.starters), by_position, teams)
+
     # Replacement level: the value of the best player at a position nobody would
     # start, i.e. just past what the league collectively needs.
     replacement = {}
-    for position, demand in POSITION_DEMAND.items():
+    for position, demand in plan.demand.items():
         ranked = sorted(
             (p.value for p in players if p.position == position and p.value > 0),
             reverse=True,
@@ -171,7 +254,7 @@ def build_pool(
     players = [
         p if p.value > 0 else Player(p.player_id, p.name, p.position, replacement[p.position])
         for p in players
-        if p.position in POSITION_DEMAND
+        if p.position in plan.demand
     ]
 
     # Trim to a realistic draft board: a couple of hundred names, by position.
@@ -192,7 +275,7 @@ def build_pool(
         current_ppg[player_id] /= games
 
     board: dict[str, Player] = {}
-    for position, demand in POSITION_DEMAND.items():
+    for position, demand in plan.demand.items():
         at_position = [p for p in players if p.position == position]
         keep = (
             len(at_position) if position in STREAMED_POSITIONS else int(teams * demand * POOL_DEPTH)
@@ -235,6 +318,7 @@ def build_pool(
         player_team,
         value_spread or 1.0,
         weekly_spread or 1.0,
+        plan,
     )
 
 
@@ -260,23 +344,6 @@ def _round_robin(teams: tuple[str, ...], weeks: tuple[int, ...]) -> tuple[Matchu
     return tuple(schedule)
 
 
-def _required_positions(slots) -> dict[str, int]:
-    """How many of each position a roster must carry.
-
-    Dedicated slots set the floor; flex slots impose nothing, since anyone can fill
-    them. DEPTH_FLOOR then tops up the thin positions so a bye doesn't empty a slot.
-    """
-    required: dict[str, int] = {}
-    for slot in slots:
-        if not slot.is_flex:
-            position = next(iter(slot.eligible))
-            required[position] = required.get(position, 0) + 1
-    for position, floor in DEPTH_FLOOR.items():
-        if position in required:
-            required[position] = max(required[position], floor)
-    return required
-
-
 def _draft(
     pool: Pool,
     teams: tuple[str, ...],
@@ -297,7 +364,7 @@ def _draft(
     }
     available = {p.player_id: p for p in pool.players}
     rosters: dict[str, list[Player]] = {team: [] for team in teams}
-    required = _required_positions(settings.slots)
+    required = pool.plan.floor
     order = list(teams)
 
     for round_index in range(settings.roster_size):
@@ -318,7 +385,7 @@ def _draft(
             candidates = [
                 p
                 for p in available.values()
-                if counts.get(p.position, 0) < MAX_AT_POSITION[p.position]
+                if counts.get(p.position, 0) < pool.plan.cap.get(p.position, 0)
             ]
             # Once there are only as many picks left as holes to fill, stop browsing.
             if picks_left <= sum(unmet.values()):
