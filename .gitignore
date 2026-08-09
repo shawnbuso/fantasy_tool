@@ -1,0 +1,8 @@
+data/
+.cache/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+yahoo_state.json
