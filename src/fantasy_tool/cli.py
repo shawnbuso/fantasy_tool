@@ -167,6 +167,55 @@ def score(
 
 
 @app.command()
+def sim(
+    rules: Annotated[Path, typer.Option(help="Rule set YAML")],
+    season: Annotated[int, typer.Option(help="Season to replay")],
+    seed: Annotated[int, typer.Option(help="Same seed reproduces the same league")] = 7,
+    teams: Annotated[int, typer.Option(help="League size")] = 10,
+    root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
+) -> None:
+    """Replay one synthetic league-season and print the final table."""
+    from .scoring import load_ruleset
+    from .sim import simulate, standings_table
+    from .sources.synthetic import build_pool, generate
+
+    ruleset = load_ruleset(rules)
+    with console.status(f"Building {season} player pool..."):
+        pool = build_pool(season, ruleset, root=root, teams=teams)
+    league = generate(pool, seed, ruleset, n_teams=teams)
+    result = simulate(league, ruleset)
+
+    skill = league.meta["skill"]
+    table = Table(title=f"{ruleset.name} -- {league.key}", title_justify="left")
+    table.add_column("Team")
+    table.add_column("Skill", justify="right")
+    table.add_column("W-L-T")
+    table.add_column("Points for", justify="right")
+    table.add_column("Points against", justify="right")
+    for team, record in standings_table(result):
+        table.add_row(
+            team,
+            f"{skill[team]:.2f}",
+            f"{record.wins}-{record.losses}-{record.ties}",
+            f"{record.points_for:.1f}",
+            f"{record.points_against:.1f}",
+        )
+    console.print(table)
+
+    fired: dict[str, float] = {}
+    for week in result.weeks:
+        for team_week in week.team_weeks.values():
+            for line in team_week.scored:
+                for name, delta in line.rule_points.items():
+                    fired[name] = fired.get(name, 0.0) + delta
+    if fired:
+        console.print()
+        console.print("[bold]Custom rules[/bold]")
+        for name, total in sorted(fired.items()):
+            console.print(f"  {name}: {total:+.1f} points across the season")
+
+
+@app.command()
 def info(
     root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
 ) -> None:

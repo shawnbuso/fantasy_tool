@@ -58,6 +58,7 @@ class Rule:
 
 
 _REGISTRY: dict[str, Rule] = {}
+_LOADED: set[Path] = set()
 
 
 def rule(name: str, *, positions: Iterable[str] | None = None) -> Callable[[RuleFn], RuleFn]:
@@ -86,16 +87,25 @@ def registered() -> dict[str, Rule]:
 def clear_registry() -> None:
     """Drop every registered rule. For tests; production loads modules once."""
     _REGISTRY.clear()
+    _LOADED.clear()
 
 
 def load_modules(paths: Iterable[Path]) -> None:
-    """Import rule modules by file path.
+    """Import rule modules by file path, at most once each.
 
     Plain importlib rather than entry points or package discovery: a rule file lives
     next to the YAML that enables it and is edited in the same breath.
+
+    Loading is idempotent because a single run routinely loads the same file more than
+    once -- a baseline and a candidate that share a module, or a sweep over a range of
+    parameters. Re-executing would build fresh function objects and trip the
+    duplicate-name guard, which is meant for two genuinely different rules claiming one
+    name, not for a file being read twice.
     """
     for path in paths:
         resolved = Path(path).resolve()
+        if resolved in _LOADED:
+            continue
         if not resolved.exists():
             raise FileNotFoundError(f"rule module {resolved} not found")
         spec = importlib.util.spec_from_file_location(resolved.stem, resolved)
@@ -104,6 +114,7 @@ def load_modules(paths: Iterable[Path]) -> None:
         module = importlib.util.module_from_spec(spec)
         sys.modules[resolved.stem] = module
         spec.loader.exec_module(module)
+        _LOADED.add(resolved)
 
 
 def evaluate(context: RuleContext, enabled: dict[str, Params]) -> dict[str, float]:

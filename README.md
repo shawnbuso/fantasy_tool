@@ -15,8 +15,48 @@ Under construction. Working today: the persisted NFL data store, a stat registry
 full parity with Yahoo's Scoring Settings page (all 74 categories, including the ones
 disabled by default), and the YAML rule sets and scorer built on top.
 
-Still to come: the season simulator and the analysis that answers whether a rule
-decides games.
+The synthetic league generator and season simulator work too:
+
+```bash
+uv run fantasy-tool sim --rules rules/house_2026.yaml --season 2024 --seed 7
+```
+
+Still to come: the counterfactual analysis that turns two runs into a verdict.
+
+## How the simulation is calibrated
+
+A simulator that runs cleanly but produces a league behaving nothing like real fantasy
+football would give confident, wrong answers. The headline metric is a rule's swing
+measured against a typical margin of victory, so the margin has to be right.
+
+| | target | why |
+|---|---|---|
+| median margin of victory | 20–25 | the denominator of every verdict |
+| lineup efficiency | 85–90% | higher means hindsight, lower means noise |
+| season points spread | 1.5–2× | best team vs worst |
+
+All three are asserted in `tests/test_sim.py`.
+
+Getting there needed four corrections worth remembering, each of which produced a
+league that *looked* fine:
+
+- **Draft on value over replacement, not raw points.** A quarterback outscores nearly
+  everyone, but you start one and the waiver wire has another nearly as good. Ranking
+  on raw value builds rosters with three quarterbacks and three receivers that then
+  can't field a legal lineup.
+- **Scale manager error to the data.** Draft value has a spread of about 3 points;
+  noise was set at 14. The draft was effectively random, which produced rosters that
+  couldn't score. Both noise terms are now multiples of the observed spread, so they
+  stay calibrated when the scoring rules change.
+- **The draft board must include breakouts.** Trimming it by prior-season value alone
+  excludes everyone who breaks out this year — precisely the players who make lineups
+  good. Membership now looks at both seasons; draft *order* still uses only the prior
+  one, so breakouts go late and reward whoever took the flyer.
+- **Managers know byes, not outcomes.** The stat feed only carries players who recorded
+  something, so absence means "didn't produce", not "didn't play". Bye weeks are
+  derived exactly (a team is on bye iff its defense has no row), and a blank non-bye
+  week counts as a zero — which is how a manager notices a player has stopped
+  producing and benches him.
 
 ## Setup
 

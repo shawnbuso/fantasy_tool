@@ -119,6 +119,26 @@ def test_missing_module_fails_loudly() -> None:
         rules_mod.load_modules([RULES_DIR / "nope.py"])
 
 
+def test_loading_the_same_module_twice_is_harmless() -> None:
+    """A single run loads a rule file repeatedly and must not trip over itself.
+
+    Comparing a baseline against a candidate loads both rule sets, and a sweep loads
+    one many times over. Re-executing the module would create fresh function objects
+    and fire the duplicate-name guard, which exists for two genuinely different rules
+    claiming one name.
+    """
+    rules_mod.load_modules([RULES_DIR / "house_2026.py"])
+    before = rules_mod.registered()
+    rules_mod.load_modules([RULES_DIR / "house_2026.py"])
+    assert rules_mod.registered() == before
+
+
+def test_loading_the_same_ruleset_twice_is_harmless() -> None:
+    first = load_ruleset(RULES_DIR / "house_2026.yaml")
+    second = load_ruleset(RULES_DIR / "house_2026.yaml")
+    assert first.custom_rules.enabled == second.custom_rules.enabled
+
+
 # --------------------------------------------------------------- evaluate
 
 

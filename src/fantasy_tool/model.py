@@ -6,6 +6,7 @@ supply the same columns: each importer fills what it has and the rest reads as 0
 Typo safety comes from validating keys against the stat registry at load time.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
@@ -30,6 +31,56 @@ class StatLine:
     def s(self, key: str) -> float:
         """Stat value, defaulting to 0.0 for anything this source didn't supply."""
         return self.stats.get(key, 0.0)
+
+
+SLOT_ELIGIBILITY: dict[str, frozenset[str]] = {
+    "QB": frozenset({"QB"}),
+    "RB": frozenset({"RB"}),
+    "WR": frozenset({"WR"}),
+    "TE": frozenset({"TE"}),
+    "K": frozenset({"K"}),
+    "DEF": frozenset({"DEF"}),
+    # Flex slots, spelled the way Yahoo spells them.
+    "W/R": frozenset({"WR", "RB"}),
+    "W/T": frozenset({"WR", "TE"}),
+    "W/R/T": frozenset({"WR", "RB", "TE"}),
+    "Q/W/R/T": frozenset({"QB", "WR", "RB", "TE"}),  # superflex
+}
+
+
+@dataclass(frozen=True, slots=True)
+class LineupSlot:
+    label: str
+    eligible: frozenset[str]
+
+    @property
+    def is_flex(self) -> bool:
+        return len(self.eligible) > 1
+
+
+def parse_slots(labels: Iterable[str]) -> tuple[LineupSlot, ...]:
+    slots = []
+    for label in labels:
+        eligible = SLOT_ELIGIBILITY.get(label.upper())
+        if eligible is None:
+            known = ", ".join(SLOT_ELIGIBILITY)
+            raise ValueError(f"unknown lineup slot {label!r}. Known slots: {known}")
+        slots.append(LineupSlot(label.upper(), eligible))
+    return tuple(slots)
+
+
+@dataclass(frozen=True, slots=True)
+class LeagueSettings:
+    name: str
+    season: int
+    teams: tuple[str, ...]
+    slots: tuple[LineupSlot, ...]
+    bench: int
+    weeks: tuple[int, ...]
+
+    @property
+    def roster_size(self) -> int:
+        return len(self.slots) + self.bench
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +201,52 @@ class History:
             for team_week in week.team_weeks.values():
                 found.extend(s for s in team_week.scored if s.line.player_id == player_id)
         return found
+
+
+@dataclass(frozen=True, slots=True)
+class League:
+    """One league-season: who owns whom, who started, and who played whom.
+
+    Source-agnostic on purpose. The synthetic generator and the Yahoo importer both
+    produce exactly this, so everything downstream is indifferent to where it came
+    from. `key` identifies the league-season and is what the counterfactual diff joins
+    on -- baseline and candidate runs must share it or the comparison is meaningless.
+    """
+
+    key: str
+    settings: LeagueSettings
+    lines: dict[tuple[str, int], StatLine]
+    rosters: dict[str, frozenset[str]]
+    lineups: dict[tuple[str, int], tuple[str, ...]]
+    schedule: tuple[Matchup, ...]
+    meta: dict[str, object] = field(default_factory=dict)
+
+    def line(self, player_id: str, week: int) -> StatLine:
+        """This player's week, or a blank line if he has no row.
+
+        Byes, injuries, and inactives are all simply absent from the source data, so
+        zero-filling here means none of them needs a special case anywhere else.
+        """
+        found = self.lines.get((player_id, week))
+        return found if found is not None else zero_line(player_id, self.settings.season, week)
+
+    def week_matchups(self, week: int) -> tuple[Matchup, ...]:
+        return tuple(m for m in self.schedule if m.week == week)
+
+
+@dataclass(frozen=True, slots=True)
+class SeasonResult:
+    key: str
+    settings: LeagueSettings
+    weeks: tuple[WeekResult, ...]
+    standings: dict[str, Record]
+
+    @property
+    def history(self) -> History:
+        return History(self.weeks)
+
+    def team_week(self, team: str, week: int) -> TeamWeek:
+        return next(w.team_weeks[team] for w in self.weeks if w.week == week)
 
 
 def zero_line(player_id: str, season: int, week: int) -> StatLine:
