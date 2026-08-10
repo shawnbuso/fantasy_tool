@@ -329,3 +329,58 @@ def test_league_is_reproducible_across_processes(pool, rules) -> None:
         cwd=str(RULES_DIR.parent),
     )
     assert other.stdout.strip() == fingerprint(generate(pool, 7, rules))
+
+
+@pytest.fixture(scope="session")
+def flex_rules():
+    """The superflex league -- the only lineup where hoarding quarterbacks is even
+    possible, since a standard lineup starts one and caps the roster at two."""
+    return load_ruleset(RULES_DIR / "league_2026.yaml")
+
+
+@pytest.fixture(scope="session")
+def flex_pool(flex_rules):
+    return build_pool(SEASON, flex_rules)
+
+
+def test_hoarding_a_position_does_not_pay(flex_pool, flex_rules) -> None:
+    """The exploit check: can a sharp manager break the league by loading one position?
+
+    A flex-heavy lineup invites it -- if quarterbacks look underpriced, fill every
+    flex slot with them. It fails on depth. Everyone already drafts as many
+    quarterbacks as they can start, so the extra ones come from far enough down the
+    board to cost more than they add.
+
+    A rule set where this test flipped would be one worth rejecting: it would reward
+    whoever noticed, at the expense of everyone who didn't.
+    """
+    seeds = range(7, 32)
+    outcomes = {}
+    for stack in (None, "QB", "WR", "RB"):
+        wins = []
+        for seed in seeds:
+            league = generate(flex_pool, seed, flex_rules, stack=stack)
+            shark = max(league.settings.teams, key=lambda t: league.meta["skill"][t])
+            wins.append(simulate(league, flex_rules).standings[shark].wins)
+        outcomes[stack] = st.mean(wins)
+
+    # The claim is that hoarding buys no material edge, not that it always loses by
+    # some exact amount. One season of leagues is a small sample and half a win either
+    # way is noise; an actual exploit would show up far larger than this.
+    for position in ("QB", "WR", "RB"):
+        assert outcomes[position] < outcomes[None] + 0.5, (
+            f"hoarding {position} beat a normal draft "
+            f"({outcomes[position]:.2f} vs {outcomes[None]:.2f} wins)"
+        )
+
+
+def test_stacking_actually_stacks(flex_pool, flex_rules) -> None:
+    """Guard the guard: the exploit test is worthless if the strategy does nothing."""
+    normal = generate(flex_pool, 7, flex_rules)
+    hoarding = generate(flex_pool, 7, flex_rules, stack="QB")
+    shark = max(normal.settings.teams, key=lambda t: normal.meta["skill"][t])
+
+    def count(league, position):
+        return sum(1 for p in league.rosters[shark] if league.positions.get(p) == position)
+
+    assert count(hoarding, "QB") > count(normal, "QB")

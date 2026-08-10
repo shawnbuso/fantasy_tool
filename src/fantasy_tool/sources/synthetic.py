@@ -358,8 +358,14 @@ def _draft(
     settings: LeagueSettings,
     skill: dict[str, float],
     rng: random.Random,
+    stack: tuple[str, str] | None = None,
 ) -> dict[str, frozenset[str]]:
     """Snake draft. Sharper managers take the best player available; casual ones reach.
+
+    `stack` is (team, position): that manager hoards the position, taking it whenever
+    one is available and he can still fill his remaining requirements. It exists to
+    test whether a rule set can be exploited by loading up on whichever position looks
+    underpriced -- the thing a sharp manager tries first.
 
     Players are ranked by value *over replacement*, not raw points. Under most scoring
     a quarterback outscores everyone -- but you can only start one, and the next
@@ -402,8 +408,10 @@ def _draft(
                 candidates = list(available.values())
 
             spread = DRAFT_NOISE_SCALE * pool.value_spread * (1.0 - skill[team])
+            hoard = stack[1] if stack and stack[0] == team else None
+            preferred = [p for p in candidates if p.position == hoard] if hoard else []
             choice = max(
-                candidates,
+                preferred or candidates,
                 key=lambda p: over_replacement[p.player_id] + rng.gauss(0.0, spread),
             )
             roster.append(choice)
@@ -551,6 +559,7 @@ def generate(
     n_teams: int = DEFAULT_TEAMS,
     weeks: tuple[int, ...] = DEFAULT_WEEKS,
     skill_range: tuple[float, float] = (0.15, 0.95),
+    stack: str | None = None,
 ) -> League:
     """Build one league-season: draft, schedule, and every week's lineups.
 
@@ -575,7 +584,9 @@ def generate(
         weeks=weeks,
     )
 
-    rosters = _draft(pool, teams, settings, skill, rng)
+    # The sharpest manager is the one who would spot and exploit a mispricing.
+    hoarder = (max(teams, key=lambda t: skill[t]), stack) if stack else None
+    rosters = _draft(pool, teams, settings, skill, rng, hoarder)
     schedule = _round_robin(teams, weeks)
     positions = {p.player_id: p.position for p in pool.players}
 
@@ -632,5 +643,5 @@ def generate(
         lineups=lineups,
         schedule=schedule,
         positions=positions,
-        meta={"skill": skill, "seed": seed},
+        meta={"skill": skill, "seed": seed, "stack": hoarder},
     )
