@@ -1,0 +1,586 @@
+<title>Everything Counts — Four Finger Family 2026</title>
+<style>
+  :root {
+    --ground: #F4F6F4;
+    --surface: #FFFFFF;
+    --surface-sunk: #ECEFEC;
+    --ink: #17202B;
+    --ink-soft: #4A5763;
+    --ink-faint: #78848E;
+    --rule: #DCE2DC;
+    --accent: #0E6B8F;
+    --gain: #1B6B45;
+    --gain-bg: #E4F0E9;
+    --penalty: #A63B22;
+    --penalty-bg: #F6E6E0;
+    --meter-track: #E2E7E2;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11161A;
+      --surface: #191F25;
+      --surface-sunk: #141A1F;
+      --ink: #E7EBE8;
+      --ink-soft: #A6B2B9;
+      --ink-faint: #7C888F;
+      --rule: #2A333A;
+      --accent: #56B4D6;
+      --gain: #5DC493;
+      --gain-bg: #172C23;
+      --penalty: #E28A6C;
+      --penalty-bg: #2E1D17;
+      --meter-track: #262E34;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #11161A;
+    --surface: #191F25;
+    --surface-sunk: #141A1F;
+    --ink: #E7EBE8;
+    --ink-soft: #A6B2B9;
+    --ink-faint: #7C888F;
+    --rule: #2A333A;
+    --accent: #56B4D6;
+    --gain: #5DC493;
+    --gain-bg: #172C23;
+    --penalty: #E28A6C;
+    --penalty-bg: #2E1D17;
+    --meter-track: #262E34;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 1.25rem 6rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 60rem; margin: 0 auto; }
+  .prose { max-width: 34rem; }
+
+  header {
+    padding: 4.5rem 0 2.5rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1.25rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2.8rem, 8vw, 4.75rem);
+    line-height: 1.02;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-family: var(--serif);
+    font-size: 1.2rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 32rem;
+    margin: 1.5rem 0 0;
+  }
+
+  section { padding-top: 3.5rem; }
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.4rem;
+    text-wrap: balance;
+  }
+  .section-note {
+    color: var(--ink-soft);
+    margin: 0 0 1.75rem;
+    max-width: 34rem;
+  }
+  p { margin: 0 0 1rem; }
+  p:last-child { margin-bottom: 0; }
+
+  .scroller { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    min-width: 34rem;
+  }
+  caption {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-bottom: 0.6rem;
+  }
+  th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--ink);
+    padding: 0 0.9rem 0.5rem 0;
+  }
+  td {
+    border-bottom: 1px solid var(--rule);
+    padding: 0.7rem 0.9rem 0.7rem 0;
+    vertical-align: baseline;
+  }
+  td:last-child, th:last-child { padding-right: 0; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .val {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.92rem;
+    white-space: nowrap;
+  }
+  .gain { color: var(--gain); }
+  .penalty { color: var(--penalty); }
+  .was {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  .note { color: var(--ink-soft); font-size: 0.9rem; }
+
+  /* Frequency meter: how often a rule actually fires, measured over
+     8,400 simulated matchups. The bar is square-rooted so the very rare
+     rules stay visible rather than collapsing to nothing. */
+  .freq { display: flex; align-items: center; gap: 0.6rem; min-width: 9rem; }
+  .meter {
+    flex: 0 0 3.5rem;
+    height: 0.4rem;
+    background: var(--meter-track);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .meter span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+  }
+  .freq-label {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .never { color: var(--ink-faint); font-style: italic; }
+
+  .lineup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    list-style: none;
+  }
+  .lineup li {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    border-radius: 2px;
+  }
+  .lineup li.flex {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .lineup li.bench { color: var(--ink-faint); border-style: dashed; }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 2px;
+    padding: 1.5rem 1.6rem;
+    margin-top: 1.5rem;
+  }
+  .callout h3 {
+    font-family: var(--serif);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 0.6rem;
+  }
+  .callout p { max-width: 34rem; }
+
+  .manual {
+    background: var(--penalty-bg);
+    border-left-color: var(--penalty);
+  }
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--penalty);
+    border: 1px solid var(--penalty);
+    border-radius: 2px;
+    padding: 0.15rem 0.45rem;
+    margin-left: 0.6rem;
+    vertical-align: 0.15em;
+  }
+
+  footer {
+    margin-top: 4.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--rule);
+    color: var(--ink-faint);
+    font-size: 0.88rem;
+  }
+  footer strong { color: var(--ink-soft); font-weight: 600; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Four Finger Family &middot; 2026 rule changes</p>
+  <h1>Everything Counts</h1>
+  <p class="standfirst">
+    A starter used to be able to play sixty snaps, catch nothing, and be worth exactly
+    as much as a guy on a bye. Not any more. This year the scoresheet stopped ignoring
+    things.
+  </p>
+</header>
+
+<section>
+  <h2>The big one: four flex slots</h2>
+  <p class="section-note">
+    One slot at each offensive position, then <strong>four flex slots that take a
+    quarterback, running back or receiver</strong>. Tight end keeps a slot of its own.
+  </p>
+  <ul class="lineup">
+    <li>QB</li><li>RB</li><li>WR</li><li>TE</li>
+    <li class="flex">Q/W/R</li><li class="flex">Q/W/R</li>
+    <li class="flex">Q/W/R</li><li class="flex">Q/W/R</li>
+    <li>K</li><li>DEF</li><li class="bench">6 bench</li>
+  </ul>
+  <div class="prose">
+    <p>
+      This only works if no position is obviously the best one, so the scoring below
+      levels them out. The average quarterback, back and receiver are now worth within
+      a point of each other per start.
+    </p>
+    <p>
+      Which means: <strong>draft the best player, not the best player at a position
+      you're short of.</strong> Positional scarcity mostly stops driving your board.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>Scoring: three changes</h2>
+  <p class="section-note">
+    Yahoo asks how many yards make a point, so fewer yards is <em>more</em> points.
+    Nothing anywhere in these rules was reduced.
+  </p>
+  <div class="scroller">
+    <table>
+      <caption>Changed values</caption>
+      <thead>
+        <tr><th scope="col">Category</th><th scope="col">Was</th><th scope="col">Now</th><th scope="col">Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Receptions</td>
+          <td class="was">0.5</td>
+          <td class="val gain">1.0</td>
+          <td class="note">Full PPR &mdash; every catch is a point</td>
+        </tr>
+        <tr>
+          <td>Receiving yards</td>
+          <td class="was">10 yds</td>
+          <td class="val gain">7.5 yds</td>
+          <td class="note">Per point &mdash; a 33% raise</td>
+        </tr>
+        <tr>
+          <td>Rushing yards</td>
+          <td class="was">10 yds</td>
+          <td class="val gain">8 yds</td>
+          <td class="note">Per point &mdash; a 25% raise</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <h3>Why receivers got the biggest raise</h3>
+    <p>
+      Not because receivers are now the best position &mdash; quarterbacks still score
+      most per start. Quarterback scoring simply didn't need to move. Passing yards and
+      passing touchdowns are untouched, so the other two had to climb to meet them.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>Kickers, by the yard</h2>
+  <p class="section-note">
+    The five distance brackets are gone. A made field goal is now worth
+    <strong>one point per 10 yards</strong>, full stop.
+  </p>
+  <div class="prose">
+    <p>
+      Kickers score the same on average &mdash; the old brackets already paid almost
+      exactly a tenth of a point per yard. What changes is that a 49&#8209;yarder finally
+      beats a 40&#8209;yarder, where the brackets paid both four points, and a 39&#8209;yarder
+      no longer pays the same as a chip shot.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>New categories</h2>
+  <p class="section-note">
+    All of these were switched off. The bar shows how often each one turns up for a
+    given team in a given week, measured across 8,400 matchups of real NFL seasons.
+  </p>
+
+  <div class="scroller">
+    <table>
+      <caption>Mistakes</caption>
+      <thead>
+        <tr><th scope="col">Category</th><th scope="col">Points</th><th scope="col">How often</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Pick six thrown</td>
+          <td class="val penalty">&minus;2</td>
+          <td><div class="freq"><div class="meter"><span style="width:63%"></span></div><span class="freq-label">10%</span></div></td>
+        </tr>
+        <tr>
+          <td>Missed extra point</td>
+          <td class="val penalty">&minus;1</td>
+          <td><div class="freq"><div class="meter"><span style="width:58%"></span></div><span class="freq-label">8.5%</span></div></td>
+        </tr>
+        <tr>
+          <td>Missed field goal, 30&ndash;39 yds</td>
+          <td class="val penalty">&minus;2</td>
+          <td><div class="freq"><div class="meter"><span style="width:28%"></span></div><span class="freq-label">2%</span></div></td>
+        </tr>
+        <tr>
+          <td>Missed field goal, 20&ndash;29 yds</td>
+          <td class="val penalty">&minus;2</td>
+          <td><div class="freq"><div class="meter"><span style="width:20%"></span></div><span class="freq-label">1%</span></div></td>
+        </tr>
+        <tr>
+          <td>Missed field goal, under 20 yds</td>
+          <td class="val penalty">&minus;5</td>
+          <td><div class="freq"><div class="meter"><span style="width:0%"></span></div><span class="freq-label never">never happened</span></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <h3>The chip shot</h3>
+    <p>
+      Five points for missing from inside twenty yards. <strong>It has never happened.</strong>
+      There have been 305 attempts that short since 1999 and a kicker has missed exactly
+      none of them &mdash; the only two that failed were blocked, in 2001 and 2002.
+    </p>
+    <p style="margin-bottom:0">
+      So this category is not really a penalty. It is a bounty on the most embarrassing
+      thing a kicker can do, and if anyone in this league collects it we will talk about
+      it for years.
+    </p>
+  </div>
+
+  <div class="scroller" style="margin-top:2.25rem">
+    <table>
+      <caption>Big plays</caption>
+      <thead>
+        <tr><th scope="col">Category</th><th scope="col">Points</th><th scope="col">How often</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>40+ yard passing touchdown</td>
+          <td class="val gain">+2</td>
+          <td><div class="freq"><div class="meter"><span style="width:100%"></span></div><span class="freq-label">26%</span></div></td>
+        </tr>
+        <tr>
+          <td>2&#8209;point conversion</td>
+          <td class="val gain">+2</td>
+          <td><div class="freq"><div class="meter"><span style="width:87%"></span></div><span class="freq-label">20%</span></div></td>
+        </tr>
+        <tr>
+          <td>40+ yard receiving touchdown</td>
+          <td class="val gain">+2</td>
+          <td><div class="freq"><div class="meter"><span style="width:76%"></span></div><span class="freq-label">15%</span></div></td>
+        </tr>
+        <tr>
+          <td>40+ yard rushing touchdown</td>
+          <td class="val gain">+3</td>
+          <td><div class="freq"><div class="meter"><span style="width:43%"></span></div><span class="freq-label">4.8%</span></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Milestone bonuses</h2>
+  <p class="section-note">
+    Yahoo's usual 100&#8209;yard bonus fires in about half of all team&#8209;weeks, which makes
+    it a scoring category rather than an occasion. These are set where the occasions
+    are. <strong>They stack</strong> &mdash; a 200&#8209;yard rushing game pays both tiers, 21 points.
+  </p>
+  <div class="scroller">
+    <table>
+      <thead>
+        <tr><th scope="col">Game</th><th scope="col">Bonus</th><th scope="col">How often</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>150 receiving yards</td>
+          <td class="val gain">+6</td>
+          <td><div class="freq"><div class="meter"><span style="width:100%"></span></div><span class="freq-label">10%</span></div></td>
+        </tr>
+        <tr>
+          <td>400 passing yards</td>
+          <td class="val gain">+6</td>
+          <td><div class="freq"><div class="meter"><span style="width:74%"></span></div><span class="freq-label">5.5%</span></div></td>
+        </tr>
+        <tr>
+          <td>150 rushing yards</td>
+          <td class="val gain">+6</td>
+          <td><div class="freq"><div class="meter"><span style="width:68%"></span></div><span class="freq-label">4.7%</span></div></td>
+        </tr>
+        <tr>
+          <td>200 receiving yards</td>
+          <td class="val gain">+15</td>
+          <td><div class="freq"><div class="meter"><span style="width:37%"></span></div><span class="freq-label">1.4%</span></div></td>
+        </tr>
+        <tr>
+          <td>200 rushing yards</td>
+          <td class="val gain">+15</td>
+          <td><div class="freq"><div class="meter"><span style="width:30%"></span></div><span class="freq-label">0.9%</span></div></td>
+        </tr>
+        <tr>
+          <td>500 passing yards</td>
+          <td class="val gain">+20</td>
+          <td><div class="freq"><div class="meter"><span style="width:18%"></span></div><span class="freq-label">once every 2 seasons</span></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Defensive dominance</h2>
+  <p class="section-note">
+    Points allowed already rewards a defense for the scoreboard. This rewards one for
+    the stat sheet. The bands don't stack &mdash; holding a team to 150 yards pays the
+    first, not both.
+  </p>
+  <div class="scroller">
+    <table>
+      <thead>
+        <tr><th scope="col">Total yards allowed</th><th scope="col">Points</th><th scope="col">How often</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>100 &ndash; 199</td>
+          <td class="val gain">+10</td>
+          <td><div class="freq"><div class="meter"><span style="width:100%"></span></div><span class="freq-label">5.6%</span></div></td>
+        </tr>
+        <tr>
+          <td>Under 100</td>
+          <td class="val gain">+30</td>
+          <td><div class="freq"><div class="meter"><span style="width:15%"></span></div><span class="freq-label">once every 6 seasons</span></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>The participation trophy <span class="tag">manual</span></h2>
+  <div class="callout manual">
+    <h3>Play a snap, score something</h3>
+    <p>
+      Any starter who takes <strong>at least one offensive snap</strong> and finishes on
+      <strong>exactly zero</strong> gets credited with <strong>10 points</strong> instead.
+      Same for every position.
+    </p>
+    <p>
+      Special teams doesn't count &mdash; you have to have been out there on offense. And
+      exactly zero means exactly zero: fumble your way to minus two and you get nothing.
+      No trophy for being actively bad.
+    </p>
+    <p class="note" style="margin-bottom:0">
+      Yahoo can't do this one, so I'll apply it by hand. Expect it about
+      <strong>18 times a season</strong> across the league &mdash; once or twice a week,
+      almost always a receiver or tight end.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>What this actually does</h2>
+  <div class="prose">
+    <p>
+      Every one of these was tested against six real NFL seasons before it made the
+      list, replaying thousands of seasons under the old rules and the new ones to see
+      what changed.
+    </p>
+    <p>
+      The whole package flips about <strong>one game in sixteen</strong>. It narrows the
+      gap between the best and worst records slightly, and nudges the underdog win rate
+      up. Most importantly, the relationship between scoring points and winning games is
+      <strong>unchanged</strong> &mdash; the league gets more varied without getting more
+      random. Nothing here is a lottery.
+    </p>
+    <p>
+      Then I checked it against us. Every lineup anyone in this league actually set over
+      the last three seasons &mdash; 210 real matchups &mdash; rescored under the new
+      rules. <strong>One game in thirteen</strong> would have gone the other way, which
+      is the simulation's answer within the margin of error. That test can only measure
+      the scoring changes and not the new flex slots, because nobody drafted for those.
+    </p>
+    <p>
+      And no, you can't beat it by filling all four flex slots with quarterbacks. I
+      checked. It costs you about half a win, because you run out of good ones.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <p>
+    <strong>Everything Counts</strong> &mdash; Four Finger Family, 2026.
+    Frequencies measured across 8,400 matchups drawn from the 2019&ndash;2024 seasons,
+    and checked against 210 real matchups from our own 2023&ndash;2025.
+  </p>
+</footer>
+
+</div>
