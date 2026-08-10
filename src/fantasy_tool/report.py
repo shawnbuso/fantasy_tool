@@ -224,17 +224,29 @@ def _winners(analysis: Analysis, console: Console) -> None:
     if not analysis.by_position:
         return
     console.print()
-    console.print("[bold]WHERE THE POINTS LAND[/bold]")
+    console.print("[bold]WHERE THE CHANGE LANDS[/bold]")
+    console.print(
+        "[dim]Points the change adds or removes -- not what a position is worth. A\n"
+        "position can dominate this while barely being the best: it just means the\n"
+        "rules moved it most.[/dim]"
+    )
 
     total = sum(abs(v) for v in analysis.by_position.values()) or 1.0
     table = Table(box=None, pad_edge=False)
     table.add_column("Position")
-    table.add_column("Rule points", justify="right")
+    table.add_column("Points added", justify="right")
     table.add_column("Share", justify="right")
+    table.add_column("Per start", justify="right")
     for position, points in sorted(
         analysis.by_position.items(), key=lambda kv: abs(kv[1]), reverse=True
     ):
-        table.add_row(position, f"{points:+,.0f}", f"{abs(points) / total:5.1%}")
+        starts = analysis.starts_by_position.get(position, 0)
+        table.add_row(
+            position,
+            f"{points:+,.0f}",
+            f"{abs(points) / total:5.1%}",
+            f"{points / starts:+.2f}" if starts else "-",
+        )
     console.print(table)
 
     if analysis.by_team_skill:

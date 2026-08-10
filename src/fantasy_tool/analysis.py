@@ -253,7 +253,8 @@ class Analysis:
     per_rule: tuple[RuleImpact, ...]
     balance: Balance
     luck: Luck
-    by_position: dict[str, float]
+    by_position: dict[str, float]  # points ADDED, not points scored
+    starts_by_position: dict[str, int]
     by_team_skill: tuple[tuple[float, float], ...]  # (skill, wins delta)
     comparable_lineups: bool
 
@@ -326,6 +327,7 @@ def compare(
     fired_any = 0
     fired_by_rule: dict[str, int] = {}
     points_by_position: dict[str, float] = {}
+    starts_by_position: dict[str, int] = {}
     for base, cand in pairs:
         for base_week, cand_week in zip(base.weeks, cand.weeks, strict=True):
             for team, team_week in cand_week.team_weeks.items():
@@ -349,6 +351,8 @@ def compare(
                 # same reason: rule contributions miss every Yahoo-native change.
                 was = {line.line.player_id: line.total for line in before.scored}
                 for line in team_week.scored:
+                    slot = line.line.position or "(no production)"
+                    starts_by_position[slot] = starts_by_position.get(slot, 0) + 1
                     delta = line.total - was.get(line.line.player_id, 0.0)
                     if abs(delta) > NEGLIGIBLE:
                         position = line.line.position or "(no production)"
@@ -376,6 +380,7 @@ def compare(
         balance=_balance(pairs, diffs, skills),
         luck=_luck(pairs),
         by_position=points_by_position,
+        starts_by_position=starts_by_position,
         by_team_skill=_team_effects(pairs, skills),
         comparable_lineups=baseline.lineup.starters == candidate.lineup.starters,
     )
