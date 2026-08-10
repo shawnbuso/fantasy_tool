@@ -56,8 +56,29 @@ def capture(state_path: Path = DEFAULT_STATE, timeout_ms: int = 300_000) -> Path
     return state_path
 
 
-def cookies(state_path: Path = DEFAULT_STATE) -> dict[str, str]:
-    """The Yahoo cookies from a saved session, ready for an HTTP client."""
+FANTASY_HOST = "football.fantasysports.yahoo.com"
+
+
+def _sent_to(domain: str, host: str) -> bool:
+    """Whether a browser would send a cookie for `domain` to `host`.
+
+    Ordinary cookie domain matching: exact host, or a parent domain. Naive substring
+    matching looks equivalent and isn't -- it sweeps in cookies for sibling
+    subdomains like `.pbs.yahoo.com`, which is Yahoo's ad server.
+    """
+    bare = domain.lstrip(".")
+    return host == bare or host.endswith("." + bare)
+
+
+def cookies(state_path: Path = DEFAULT_STATE, host: str = FANTASY_HOST) -> dict[str, str]:
+    """Cookies from a saved session that belong on a request to `host`.
+
+    Filtering by domain the way a browser does isn't fussiness, it's required. A
+    browser profile carries cookies for the whole web, and sending them all produces a
+    Cookie header Yahoo rejects outright with "Size of a request header field exceeds
+    server limit" -- three ad-tech cookies alone ran to 8KB. Matching properly takes
+    the header from around 12KB to 3KB.
+    """
     if not state_path.exists():
         raise FileNotFoundError(
             f"No saved session at {state_path}. Run `fantasy-tool yahoo-auth` first."
@@ -66,5 +87,5 @@ def cookies(state_path: Path = DEFAULT_STATE) -> dict[str, str]:
     return {
         cookie["name"]: cookie["value"]
         for cookie in state.get("cookies", [])
-        if "yahoo.com" in cookie.get("domain", "")
+        if _sent_to(cookie.get("domain", ""), host)
     }

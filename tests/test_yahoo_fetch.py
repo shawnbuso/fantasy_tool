@@ -158,3 +158,42 @@ def test_only_yahoo_cookies_are_kept(tmp_path: Path) -> None:
         "]}"
     )
     assert auth.cookies(state) == {"T": "yes", "SSL": "yes"}
+
+
+def test_sibling_subdomain_cookies_are_not_sent(tmp_path: Path) -> None:
+    """Cookie domains need real matching, not a substring check.
+
+    A saved browser profile carries cookies for the entire web, and Yahoo's own ad
+    server sets some very large ones on `.pbs.yahoo.com`. A substring test for
+    "yahoo.com" sweeps those in, and the resulting Cookie header is big enough that
+    Yahoo rejects the request outright: HTTP 400, "Size of a request header field
+    exceeds server limit". Real matching took the header from 12KB to 3KB.
+    """
+    state = tmp_path / "session.json"
+    state.write_text(
+        '{"cookies": ['
+        '{"name": "T", "value": "auth", "domain": ".yahoo.com"},'
+        '{"name": "SSL", "value": "auth", "domain": "fantasysports.yahoo.com"},'
+        '{"name": "uids", "value": "' + "x" * 3000 + '", "domain": ".pbs.yahoo.com"},'
+        '{"name": "tracker", "value": "no", "domain": ".doubleclick.net"}'
+        "]}"
+    )
+    got = auth.cookies(state)
+    assert got == {"T": "auth", "SSL": "auth"}
+    header_bytes = sum(len(k) + len(v) + 2 for k, v in got.items())
+    assert header_bytes < 4096
+
+
+@pytest.mark.parametrize(
+    ("domain", "sent"),
+    [
+        (".yahoo.com", True),  # parent domain
+        ("football.fantasysports.yahoo.com", True),  # exact host
+        (".fantasysports.yahoo.com", True),  # parent subdomain
+        (".pbs.yahoo.com", False),  # sibling -- Yahoo's ad server
+        ("mail.yahoo.com", False),  # sibling
+        (".doubleclick.net", False),  # unrelated
+    ],
+)
+def test_cookie_domain_matching(domain: str, sent: bool) -> None:
+    assert auth._sent_to(domain, auth.FANTASY_HOST) is sent
