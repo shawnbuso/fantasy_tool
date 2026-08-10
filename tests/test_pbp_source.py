@@ -87,3 +87,26 @@ def test_long_tds_do_not_exceed_long_plays(frame: pl.DataFrame) -> None:
     """A 40+ yard touchdown is by definition also a 40+ yard play."""
     bad = frame.filter(pl.col("receiving_tds_40") > pl.col("receiving_40"))
     assert bad.height == 0, bad.select("name", "week", "receiving_40", "receiving_tds_40").head()
+
+
+def test_defensive_touchdowns_cover_every_type(frame: pl.DataFrame) -> None:
+    """Yahoo's D/ST "Touchdown" means any defensive score, not just pick sixes.
+
+    nflverse's own def_tds counts interception returns only -- it matched our pick-six
+    total exactly, to the row -- so fumble and blocked-kick returns were dropped and
+    the category scored roughly half the touchdowns it should. Kick and punt returns
+    stay out on purpose: Yahoo scores those under a category of their own.
+    """
+    defenses = frame.filter(pl.col("position") == "DEF")
+    parts = (
+        pl.col("def_interception_return_td")
+        + pl.col("def_fumble_return_td")
+        + pl.col("def_blocked_return_td")
+    )
+    assert defenses.filter(parts != pl.col("def_tds")).height == 0
+    # Each type must actually contribute, or we're back to counting one of them.
+    for column in ("def_interception_return_td", "def_fumble_return_td"):
+        assert defenses[column].sum() > 0
+    assert defenses["def_tds"].sum() > defenses["def_interception_return_td"].sum()
+    # Return touchdowns are a separate category and must not be folded in.
+    assert defenses["def_return_tds"].sum() > 0

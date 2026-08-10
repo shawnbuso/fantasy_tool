@@ -300,6 +300,18 @@ def build_season(season: int) -> pl.DataFrame:
     defense = _defense_rows(season).join(
         pbp.team_rows(season), on=["season", "week", "player_id"], how="left"
     )
+    # Yahoo's D/ST "Touchdown" means any defensive score. nflverse's def_tds counts
+    # interception returns only -- it matched our pick-six count exactly, to the row --
+    # so fumble and blocked-kick returns were being dropped, roughly halving the
+    # category. Rebuild it from the three defensive types we derive from play-by-play.
+    # Kick and punt returns stay out: Yahoo scores those under its own category.
+    defense = defense.with_columns(
+        (
+            pl.col("def_interception_return_td").fill_null(0.0)
+            + pl.col("def_fumble_return_td").fill_null(0.0)
+            + pl.col("def_blocked_return_td").fill_null(0.0)
+        ).alias("def_tds")
+    )
     combined = pl.concat([players, defense], how="diagonal")
 
     # Every stat column present and non-null, so downstream code never guards.
