@@ -1,0 +1,20 @@
+# Milestone bonuses: Yahoo's yardage bonus tiers, with the targets set where the
+# drama is rather than at the usual 100.
+#
+# The 100-yard game fires in roughly half of all team-weeks, which makes it a scoring
+# category rather than an occasion. 150 and 200 are occasions. Bonuses are cumulative,
+# so a 200-yard rushing game pays both tiers.
+
+extends: kicker_swap.yaml
+name: "... + milestone bonuses"
+
+bonuses:
+  rushing_yards:
+    - {target: 150, points: 3}   # ~4.6% of team-weeks
+    - {target: 200, points: 7}   # ~0.7%, about one a season league-wide
+  receiving_yards:
+    - {target: 150, points: 3}   # ~9.0%
+    - {target: 200, points: 7}   # ~1.0%
+  passing_yards:
+    - {target: 400, points: 3}   # ~4.0%
+    - {target: 500, points: 10}  # ~0.2%, roughly one every five seasons

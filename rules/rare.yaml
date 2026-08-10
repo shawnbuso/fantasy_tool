@@ -1,0 +1,11 @@
+# Milestone bonuses plus defensive dominance.
+#
+# Yahoo scores yards allowed in fixed 100-yard bands, mutually exclusive: a defense
+# holding a team to 150 yards gets the 100-199 award and not the 0-99 one.
+
+extends: milestones.yaml
+name: "... + milestone bonuses + defensive dominance"
+
+scoring:
+  ya_100_199: 5   # ~5.7% of team-weeks -- a genuinely dominant defensive game
+  ya_0_99: 15     # ~0.06% -- once in seventeen seasons
