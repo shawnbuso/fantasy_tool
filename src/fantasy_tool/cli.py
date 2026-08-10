@@ -606,6 +606,104 @@ def yahoo_probe(
     console.print("\n[dim]Send me this file and I'll write the parser against it.[/dim]")
 
 
+@app.command("yahoo-season")
+def yahoo_season(
+    league_id: Annotated[str, typer.Argument(help="That season's Yahoo league id")],
+    season: Annotated[int, typer.Option(help="Season year")],
+    weeks: Annotated[str, typer.Option(help="Fantasy regular season")] = "1-14",
+    teams: Annotated[int, typer.Option()] = 10,
+    state: Annotated[Path, typer.Option()] = Path("data/yahoo/session.json"),
+    cache: Annotated[Path, typer.Option()] = Path("data/yahoo/pages"),
+    root: Annotated[Path, typer.Option()] = store.DEFAULT_ROOT,
+) -> None:
+    """Download a real league-season and summarise what came back.
+
+    Lineups come from Yahoo; every point is recomputed from NFL stats, so the scoring
+    that season happened to use doesn't matter.
+    """
+    from .sources.yahoo.fetch import Scraper, SessionExpired
+    from .sources.yahoo.season import build_league, fetch_season
+
+    low, high = (int(x) for x in weeks.split("-"))
+    span = range(low, high + 1)
+
+    try:
+        with console.status("Fetching...") as status, Scraper(state, cache) as scraper:
+            by_week, schedule, names = fetch_season(
+                scraper, league_id, season, span, teams, progress=status.update
+            )
+    except (SessionExpired, FileNotFoundError, ImportError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    league, unmatched = build_league(league_id, season, by_week, schedule, names, root=root)
+
+    console.print(
+        f"[green]{season}[/green]  {len(names)} teams, {len(by_week)} weeks, "
+        f"{len(schedule)} matchups"
+    )
+    console.print(
+        f"Lineup: {' '.join(s.label for s in league.settings.slots)} "
+        f"(+{league.settings.bench} bench)"
+    )
+    if unmatched:
+        table = Table("Unmatched player", "Weeks", title="Not found in the NFL id crosswalk")
+        for name, count in sorted(unmatched.items(), key=lambda kv: -kv[1])[:15]:
+            table.add_row(name, str(count))
+        console.print(table)
+        console.print("[yellow]These score nothing; usually retired or practice-squad.[/yellow]")
+    else:
+        console.print("[green]Every player matched the NFL id crosswalk.[/green]")
+
+
+@app.command("yahoo-evaluate")
+def yahoo_evaluate(
+    league_id: Annotated[str, typer.Argument(help="That season's Yahoo league id")],
+    season: Annotated[int, typer.Option()],
+    base: Annotated[Path, typer.Option(help="Baseline rule set")],
+    candidate: Annotated[Path, typer.Option(help="Candidate rule set")],
+    weeks: Annotated[str, typer.Option()] = "1-14",
+    teams: Annotated[int, typer.Option()] = 10,
+    state: Annotated[Path, typer.Option()] = Path("data/yahoo/session.json"),
+    cache: Annotated[Path, typer.Option()] = Path("data/yahoo/pages"),
+    root: Annotated[Path, typer.Option()] = store.DEFAULT_ROOT,
+) -> None:
+    """Replay the league's own season under two rule sets and compare.
+
+    The lineups are the ones actually set, so this answers what a rule would have done
+    to *this* league rather than to a simulated one. It is a far smaller sample than a
+    synthetic sweep -- one season is 70 matchups -- so read it as a reality check on
+    the model, not as a replacement for it.
+    """
+    from .analysis import compare
+    from .report import render
+    from .scoring import load_ruleset
+    from .sim import simulate
+    from .sources.yahoo.fetch import Scraper, SessionExpired
+    from .sources.yahoo.season import build_league, fetch_season
+
+    baseline_rules = load_ruleset(base)
+    candidate_rules = load_ruleset(candidate)
+    low, high = (int(x) for x in weeks.split("-"))
+
+    try:
+        with console.status("Fetching...") as status, Scraper(state, cache) as scraper:
+            parts = fetch_season(
+                scraper, league_id, season, range(low, high + 1), teams, progress=status.update
+            )
+    except (SessionExpired, FileNotFoundError, ImportError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    league, unmatched = build_league(league_id, season, *parts, root=root)
+    if unmatched:
+        console.print(f"[yellow]{len(unmatched)} players unmatched; they score nothing.[/yellow]")
+
+    pairs = [(simulate(league, baseline_rules), simulate(league, candidate_rules))]
+    analysis = compare(pairs, baseline_rules, candidate_rules)
+    render(analysis, console, baseline=baseline_rules.name, candidate=candidate_rules.name)
+
+
 @app.command()
 def info(
     root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
