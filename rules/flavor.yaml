@@ -23,6 +23,10 @@ scoring:
   # Handing it to the other team's defense, on top of the interception itself. ~10%.
   pick_sixes_thrown: -2
 
+  # --- Standard scoring the league had switched off
+  # Not rare at 20% of team-weeks, but most leagues score it and it's a fun moment.
+  two_pt_conversions: 2
+
   # --- Highlights
   passing_tds_40: 2
   receiving_tds_40: 2
