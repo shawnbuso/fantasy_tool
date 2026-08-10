@@ -88,4 +88,4 @@ custom_rules:
   modules: [house_2026.py]
   enabled:
     participation_trophy:
-      value: 12
+      value: 10
