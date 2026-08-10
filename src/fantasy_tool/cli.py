@@ -509,8 +509,8 @@ def flatten(
             + ", ".join(str(m) for m in ruleset.custom_rules.modules)
             + "]\n  enabled:\n"
         )
-        for name, params in ruleset.custom_rules.enabled.items():
-            custom += f"    {name}:\n"
+        for rule_name, params in ruleset.custom_rules.enabled.items():
+            custom += f"    {rule_name}:\n"
             custom += "".join(f"      {k}: {v}\n" for k, v in params.items())
 
     text = f"""# {ruleset.name}
