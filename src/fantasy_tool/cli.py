@@ -543,6 +543,69 @@ scoring:{chr(10).join(body)}
     console.print(f"[green]Wrote[/green] {out}")
 
 
+@app.command("yahoo-auth")
+def yahoo_auth(
+    state: Annotated[Path, typer.Option(help="Where to save the session")] = Path(
+        "data/yahoo/session.json"
+    ),
+) -> None:
+    """Log in to Yahoo once, in a real browser, and save the session.
+
+    Yahoo's login is defended by two-factor prompts and device checks, so this step is
+    manual by design. Everything after it is plain HTTP. Expect the session to last
+    days to weeks, not months.
+    """
+    from .sources.yahoo.auth import capture
+
+    try:
+        written = capture(state)
+    except ImportError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Saved session to[/green] {written}")
+
+
+@app.command("yahoo-probe")
+def yahoo_probe(
+    league_id: Annotated[str, typer.Argument(help="Yahoo league id, e.g. 786986")],
+    season: Annotated[int | None, typer.Option(help="Past season; omit for current")] = None,
+    team: Annotated[int, typer.Option(help="Team id to sample")] = 1,
+    week: Annotated[int, typer.Option(help="Week to sample")] = 1,
+    state: Annotated[Path, typer.Option()] = Path("data/yahoo/session.json"),
+    cache: Annotated[Path, typer.Option()] = Path("data/yahoo/pages"),
+) -> None:
+    """Fetch a single page and report what's in it.
+
+    Run this before anything else. Nobody has published working selectors for Yahoo
+    roster pages, so the parser has to be written against real markup -- this is how
+    we get some.
+    """
+    from .sources.yahoo.fetch import Scraper, SessionExpired, matchup_url
+
+    url = matchup_url(league_id, team, week, season)
+    console.print(f"[dim]{url}[/dim]")
+    try:
+        with Scraper(state, cache) as scraper:
+            page = scraper.get(url, key=f"probe/{season or 'current'}-w{week:02d}-t{team:02d}")
+    except (SessionExpired, FileNotFoundError, ImportError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print(
+        f"[green]{'Read from cache' if page.from_cache else 'Fetched'}[/green] "
+        f"{len(page.html):,} bytes -> {page.path}"
+    )
+
+    lowered = page.html.lower()
+    table = Table("Signal", "Found", title="What's in the page", title_justify="left")
+    table.add_row("<table> elements", str(lowered.count("<table")))
+    table.add_row("looks like a login page", "yes" if "sign in" in lowered else "no")
+    for marker in ("statTable", "Starters", "Bench", "fantasy points", "Proj"):
+        table.add_row(f"contains {marker!r}", "yes" if marker.lower() in lowered else "no")
+    console.print(table)
+    console.print("\n[dim]Send me this file and I'll write the parser against it.[/dim]")
+
+
 @app.command()
 def info(
     root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
