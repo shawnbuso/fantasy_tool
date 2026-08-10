@@ -24,7 +24,9 @@ class SweepPoint:
 
     @property
     def label(self) -> str:
-        return ", ".join(f"{key}={_show(value)}" for _, key, value in self.settings)
+        return ", ".join(
+            f"{key.rsplit('.', 1)[-1]}={_show(value)}" for _, key, value in self.settings
+        )
 
     @property
     def swept(self) -> set[str]:
@@ -54,15 +56,29 @@ def _show(value) -> str:
     return str(value)
 
 
+NATIVE = ("scoring", "yards_per_point", "bonus")
+
+
 def parse_spec(spec: str) -> tuple[str, str, list]:
-    """Parse `rule_name.param=v1,v2,v3` into the rule, the parameter, and its values."""
+    """Parse a sweep target and its values.
+
+    Four shapes, because a league's knobs live in four places:
+
+        fg_long_bonus.bonus=5,10,20        a custom rule's parameter
+        scoring.ya_0_99=10,20,30           a Yahoo category
+        yards_per_point.rushing_yards=7,8  a Yahoo yardage rate
+        bonus.passing_yards.500=10,20,30   one tier of a Yahoo yardage bonus
+    """
     target, _, values = spec.partition("=")
     if not values:
-        raise ValueError(f"expected rule.param=value1,value2 but got {spec!r}")
-    rule_name, _, param = target.partition(".")
-    if not param:
-        raise ValueError(f"expected rule.param=... but got {target!r}")
-    return rule_name.strip(), param.strip(), [_coerce(v.strip()) for v in values.split(",")]
+        raise ValueError(f"expected target=value1,value2 but got {spec!r}")
+    namespace, _, rest = target.partition(".")
+    if not rest:
+        raise ValueError(f"expected <rule or section>.<name>=... but got {target!r}")
+    namespace = namespace.strip()
+    if namespace == "bonus" and "." not in rest:
+        raise ValueError("bonus sweeps need a tier target, e.g. bonus.passing_yards.500=...")
+    return namespace, rest.strip(), [_coerce(v.strip()) for v in values.split(",")]
 
 
 def _coerce(text: str):
@@ -79,14 +95,47 @@ def _coerce(text: str):
 
 
 def apply_settings(ruleset: RuleSet, settings: tuple[Setting, ...]) -> RuleSet:
+    """Return a copy of the rule set with each swept value applied."""
     enabled = {name: dict(params) for name, params in ruleset.custom_rules.enabled.items()}
-    for rule_name, param, value in settings:
-        if rule_name not in enabled:
-            available = ", ".join(sorted(enabled)) or "none"
-            raise ValueError(f"{rule_name!r} is not enabled in this rule set. Enabled: {available}")
-        enabled[rule_name][param] = value
+    scoring = dict(ruleset.scoring)
+    yards = dict(ruleset.yards_per_point)
+    bonuses = {k: [b.model_copy() for b in v] for k, v in ruleset.bonuses.items()}
+
+    for namespace, path, value in settings:
+        if namespace == "scoring":
+            if path not in scoring:
+                raise ValueError(f"{path!r} is not an enabled scoring category")
+            scoring[path] = float(value)
+        elif namespace == "yards_per_point":
+            if path not in yards:
+                raise ValueError(f"{path!r} is not scored by yards per point here")
+            yards[path] = float(value)
+        elif namespace == "bonus":
+            category, _, target = path.partition(".")
+            tiers = bonuses.get(category)
+            if not tiers:
+                raise ValueError(f"no bonuses on {category!r}")
+            match = [b for b in tiers if b.target == float(target)]
+            if not match:
+                available = ", ".join(f"{b.target:g}" for b in tiers)
+                raise ValueError(f"{category!r} has no {target} tier. Targets: {available}")
+            match[0].points = float(value)
+        else:
+            if namespace not in enabled:
+                available = ", ".join(sorted(enabled)) or "none"
+                raise ValueError(
+                    f"{namespace!r} is not an enabled rule or known section. "
+                    f"Enabled rules: {available}"
+                )
+            enabled[namespace][path] = value
+
     return ruleset.model_copy(
-        update={"custom_rules": ruleset.custom_rules.model_copy(update={"enabled": enabled})}
+        update={
+            "scoring": scoring,
+            "yards_per_point": yards,
+            "bonuses": bonuses,
+            "custom_rules": ruleset.custom_rules.model_copy(update={"enabled": enabled}),
+        }
     )
 
 
@@ -114,7 +163,7 @@ def run(
     points = []
     for index, settings in enumerate(combinations):
         if progress:
-            label = ", ".join(f"{k}={_show(v)}" for _, k, v in settings)
+            label = ", ".join(f"{k.rsplit('.', 1)[-1]}={_show(v)}" for _, k, v in settings)
             progress(f"Testing {label} ({index + 1} of {len(combinations)})...")
         variant = apply_settings(candidate, settings)
         pairs = run_pairs(leagues, baseline, variant, baseline_results=baseline_results)

@@ -62,7 +62,7 @@ def test_apply_settings_overrides_one_parameter(candidate) -> None:
 
 
 def test_apply_settings_rejects_a_rule_that_is_not_enabled(candidate) -> None:
-    with pytest.raises(ValueError, match="not enabled"):
+    with pytest.raises(ValueError, match="not an enabled rule"):
         sweep_module.apply_settings(candidate, (("no_such_rule", "x", 1),))
 
 
@@ -199,3 +199,39 @@ def test_leagues_are_reused_not_regenerated(leagues, baseline) -> None:
     again = build_leagues([SEASON], baseline, leagues=3, seed=7)
     assert [lg.key for lg in again] == [lg.key for lg in leagues]
     assert [lg.rosters for lg in again] == [lg.rosters for lg in leagues]
+
+
+# --------------------------------------------------------------- native targets
+
+
+def test_sweeps_a_yahoo_category(baseline) -> None:
+    tuned = sweep_module.apply_settings(baseline, (("scoring", "def_sacks", 3),))
+    assert tuned.scoring["def_sacks"] == 3
+    assert baseline.scoring["def_sacks"] == 1  # original untouched
+
+
+def test_sweeps_a_yardage_rate(baseline) -> None:
+    tuned = sweep_module.apply_settings(baseline, (("yards_per_point", "rushing_yards", 8),))
+    assert tuned.yards_per_point["rushing_yards"] == 8
+    assert tuned.points["rushing_yards"] == pytest.approx(0.125)
+
+
+def test_sweeps_one_bonus_tier() -> None:
+    rules = load_ruleset(RULES_DIR / "milestones.yaml")
+    tuned = sweep_module.apply_settings(rules, (("bonus", "passing_yards.500", 25),))
+    tiers = {b.target: b.points for b in tuned.bonuses["passing_yards"]}
+    assert tiers[500] == 25
+    assert tiers[400] == 3  # the other tier is left alone
+
+
+def test_bonus_sweep_needs_a_tier() -> None:
+    with pytest.raises(ValueError, match="tier target"):
+        sweep_module.parse_spec("bonus.passing_yards=10,20")
+
+
+def test_unknown_native_targets_are_refused(baseline) -> None:
+    with pytest.raises(ValueError, match="not an enabled scoring category"):
+        sweep_module.apply_settings(baseline, (("scoring", "ya_0_99", 5),))
+    with pytest.raises(ValueError, match="no 999 tier"):
+        rules = load_ruleset(RULES_DIR / "milestones.yaml")
+        sweep_module.apply_settings(rules, (("bonus", "passing_yards.999", 5),))

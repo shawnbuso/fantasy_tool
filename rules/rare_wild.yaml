@@ -1,0 +1,19 @@
+# The rare rules at roughly triple. The top tiers become league events.
+
+extends: rare.yaml
+name: "... rare rules, wild"
+
+bonuses:
+  rushing_yards:
+    - {target: 150, points: 10}
+    - {target: 200, points: 25}
+  receiving_yards:
+    - {target: 150, points: 10}
+    - {target: 200, points: 25}
+  passing_yards:
+    - {target: 400, points: 10}
+    - {target: 500, points: 35}
+
+scoring:
+  ya_100_199: 15
+  ya_0_99: 50

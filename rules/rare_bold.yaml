@@ -1,0 +1,23 @@
+# The rare rules, roughly doubled.
+#
+# There is room for it: milestone games fire in matchups whose median margin is 39-54
+# points against 35 overall, because a 200-yard rusher usually means his team won big.
+# The bonus mostly lands on games already decided.
+
+extends: rare.yaml
+name: "... rare rules, bold"
+
+bonuses:
+  rushing_yards:
+    - {target: 150, points: 6}
+    - {target: 200, points: 15}
+  receiving_yards:
+    - {target: 150, points: 6}
+    - {target: 200, points: 15}
+  passing_yards:
+    - {target: 400, points: 6}
+    - {target: 500, points: 20}
+
+scoring:
+  ya_100_199: 10
+  ya_0_99: 30
