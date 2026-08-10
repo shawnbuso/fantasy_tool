@@ -1,0 +1,93 @@
+# The 2026 league, in one file.
+#
+# Generated from the layered configs, so there is nothing transcribed by hand; those
+# files remain for measuring individual pieces. Everything here is a native Yahoo
+# setting except the participation trophy at the bottom, which is applied manually.
+#
+# Yardage is written the way the settings page asks for it: how many yards make one
+# point. Fewer yards per point is more points per yard.
+
+name: "Four Finger Family -- 2026"
+
+lineup:
+  starters: [QB, RB, WR, TE, Q/W/R, Q/W/R, Q/W/R, Q/W/R, K, DEF]
+  bench: 6
+
+options:
+  fractional_points: true
+  negative_points: true
+
+yards_per_point:
+  passing_yards: 25
+  rushing_yards: 8
+  receiving_yards: 7.5
+  fg_total_yards: 10
+
+scoring:
+  # --- Offense / Passing
+  passing_tds: 4
+  passing_interceptions: -1
+  pick_sixes_thrown: -2
+  passing_tds_40: 2
+
+  # --- Offense / Rushing
+  rushing_tds: 6
+  rushing_tds_40: 3
+
+  # --- Offense / Receiving
+  receiving_tds: 6
+  receptions: 1
+  receiving_tds_40: 2
+
+  # --- Offense / Kick and Punt Returning
+  special_teams_tds: 6
+
+  # --- Offense / Miscellaneous
+  fumbles_lost_total: -2
+
+  # --- Kickers / PAT
+  pat_made: 1
+  pat_missed: -1
+
+  # --- Defense/Special Teams / Points Allowed
+  pa_0: 10
+  pa_1_6: 7
+  pa_7_13: 4
+  pa_14_20: 1
+  pa_28_34: -1
+  pa_35_plus: -4
+
+  # --- Defense/Special Teams / Defense
+  def_sacks: 1
+  def_interceptions: 2
+  def_fumble_recoveries: 2
+  def_tds: 6
+  def_safeties: 2
+  def_blocked_kicks: 2
+
+  # --- Kickers / Field Goals
+  fg_missed_0_19: -5
+  fg_missed_20_29: -2
+  fg_missed_30_39: -2
+
+  # --- Defense/Special Teams / Yards Allowed
+  ya_100_199: 10
+  ya_0_99: 30
+
+# Cumulative: a 200-yard rushing game pays both tiers, 21 points of bonus in total.
+bonuses:
+  rushing_yards:
+    - {target: 150, points: 6}
+    - {target: 200, points: 15}
+  receiving_yards:
+    - {target: 150, points: 6}
+    - {target: 200, points: 15}
+  passing_yards:
+    - {target: 400, points: 6}
+    - {target: 500, points: 20}
+
+custom_rules:
+  modules: [house_2026.py]
+  enabled:
+    participation_trophy:
+      value: 15

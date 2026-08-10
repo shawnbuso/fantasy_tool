@@ -417,3 +417,25 @@ def test_the_league_configs_use_yahoo_units() -> None:
     # Fewer yards per point is more points per yard, so these really are increases.
     assert balanced.points["receiving_yards"] > base.points["receiving_yards"]
     assert balanced.points["rushing_yards"] > base.points["rushing_yards"]
+
+
+def test_consolidated_league_matches_the_layered_configs() -> None:
+    """One flat file is what gets typed into Yahoo; the layers are for measuring.
+
+    Two descriptions of the same league is a standing invitation for them to drift,
+    so this pins them together. If a layer changes, regenerate the flat file.
+    """
+    layered = load_ruleset(RULES_DIR / "rare_bold.yaml")
+    flat = load_ruleset(RULES_DIR / "league_2026.yaml")
+
+    assert flat.points == layered.points
+    assert flat.lineup.starters == layered.lineup.starters
+    assert flat.lineup.bench == layered.lineup.bench
+    assert flat.custom_rules.enabled == layered.custom_rules.enabled
+
+    def tiers(ruleset):
+        return {k: [(b.target, b.points) for b in v] for k, v in ruleset.bonuses.items()}
+
+    assert tiers(flat) == tiers(layered)
+    # And it must stand alone -- no extends chain to resolve.
+    assert "extends" not in (RULES_DIR / "league_2026.yaml").read_text()
