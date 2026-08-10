@@ -36,15 +36,27 @@ def render(analysis: Analysis, console: Console, *, baseline: str, candidate: st
     )
 
     if not analysis.comparable_lineups:
-        console.print(
-            Panel(
-                "The two rule sets use different lineup slots, so the lineups had to be\n"
-                "re-derived and differ by construction. Part of the measured change is\n"
-                "roster shape rather than scoring. Treat the numbers as directional.",
-                title="not a clean counterfactual",
-                border_style="yellow",
+        if analysis.fixed_lineups:
+            console.print(
+                Panel(
+                    "These are the lineups people actually set, under the roster they\n"
+                    "actually had. The candidate uses different lineup slots, and that\n"
+                    "change is NOT measured here -- only the scoring changes are. What a\n"
+                    "different roster would have done is unknowable from what was played.",
+                    title="scoring changes only",
+                    border_style="yellow",
+                )
             )
-        )
+        else:
+            console.print(
+                Panel(
+                    "The two rule sets use different lineup slots, so the lineups had to be\n"
+                    "re-derived and differ by construction. Part of the measured change is\n"
+                    "roster shape rather than scoring. Treat the numbers as directional.",
+                    title="not a clean counterfactual",
+                    border_style="yellow",
+                )
+            )
 
     _verdicts(analysis, console)
     _swing(analysis, console)

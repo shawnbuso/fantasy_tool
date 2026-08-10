@@ -658,8 +658,9 @@ def yahoo_season(
 
 @app.command("yahoo-evaluate")
 def yahoo_evaluate(
-    league_id: Annotated[str, typer.Argument(help="That season's Yahoo league id")],
-    season: Annotated[int, typer.Option()],
+    league: Annotated[
+        list[str], typer.Option(help="YEAR:LEAGUE_ID, repeatable -- e.g. 2024:583648")
+    ],
     base: Annotated[Path, typer.Option(help="Baseline rule set")],
     candidate: Annotated[Path, typer.Option(help="Candidate rule set")],
     weeks: Annotated[str, typer.Option()] = "1-14",
@@ -668,12 +669,11 @@ def yahoo_evaluate(
     cache: Annotated[Path, typer.Option()] = Path("data/yahoo/pages"),
     root: Annotated[Path, typer.Option()] = store.DEFAULT_ROOT,
 ) -> None:
-    """Replay the league's own season under two rule sets and compare.
+    """Replay the league's own seasons under two rule sets and compare.
 
     The lineups are the ones actually set, so this answers what a rule would have done
-    to *this* league rather than to a simulated one. It is a far smaller sample than a
-    synthetic sweep -- one season is 70 matchups -- so read it as a reality check on
-    the model, not as a replacement for it.
+    to *this* league rather than to a simulated one. Pool as many seasons as you have:
+    a single season is 70 matchups, which is far too few to pin a rate down.
     """
     from .analysis import compare
     from .report import render
@@ -686,21 +686,40 @@ def yahoo_evaluate(
     candidate_rules = load_ruleset(candidate)
     low, high = (int(x) for x in weeks.split("-"))
 
+    wanted = []
+    for entry in league:
+        year, _, identifier = entry.partition(":")
+        if not identifier:
+            console.print(f"[red]Expected YEAR:LEAGUE_ID, got {entry!r}[/red]")
+            raise typer.Exit(1)
+        wanted.append((int(year), identifier))
+
+    pairs, missing = [], {}
     try:
         with console.status("Fetching...") as status, Scraper(state, cache) as scraper:
-            parts = fetch_season(
-                scraper, league_id, season, range(low, high + 1), teams, progress=status.update
-            )
+            for year, identifier in sorted(wanted):
+                parts = fetch_season(
+                    scraper,
+                    identifier,
+                    year,
+                    range(low, high + 1),
+                    teams,
+                    progress=status.update,
+                )
+                built, unmatched = build_league(identifier, year, *parts, root=root)
+                missing.update(unmatched)
+                pairs.append((simulate(built, baseline_rules), simulate(built, candidate_rules)))
     except (SessionExpired, FileNotFoundError, ImportError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
 
-    league, unmatched = build_league(league_id, season, *parts, root=root)
-    if unmatched:
-        console.print(f"[yellow]{len(unmatched)} players unmatched; they score nothing.[/yellow]")
+    if missing:
+        console.print(f"[yellow]{len(missing)} players unmatched; they score nothing.[/yellow]")
+    console.print(
+        f"[dim]{len(pairs)} real season(s): {', '.join(str(y) for y, _ in sorted(wanted))}[/dim]"
+    )
 
-    pairs = [(simulate(league, baseline_rules), simulate(league, candidate_rules))]
-    analysis = compare(pairs, baseline_rules, candidate_rules)
+    analysis = compare(pairs, baseline_rules, candidate_rules, fixed_lineups=True)
     render(analysis, console, baseline=baseline_rules.name, candidate=candidate_rules.name)
 
 

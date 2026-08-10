@@ -51,10 +51,7 @@ def test_opponent_is_read_from_the_team_page() -> None:
     """Yahoo's matchup page ignores the team id in the URL and always renders the
     logged-in user's own matchup, so the schedule has to come from team pages, each
     of which names the opponent it faced."""
-    html = (
-        '<div>Week 5 vs <a href="/2024/f1/583648/4">Butch’s First-Class Team</a>'
-        " • 2 nd</div>"
-    )
+    html = '<div>Week 5 vs <a href="/2024/f1/583648/4">Butch’s First-Class Team</a> • 2 nd</div>'
     assert season.parse_opponent(html) == (4, "Butch’s First-Class Team")
 
 

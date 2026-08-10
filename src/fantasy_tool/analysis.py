@@ -257,6 +257,7 @@ class Analysis:
     starts_by_position: dict[str, int]
     by_team_skill: tuple[tuple[float, float], ...]  # (skill, wins delta)
     comparable_lineups: bool
+    fixed_lineups: bool = False
 
 
 def _impact(
@@ -316,6 +317,7 @@ def compare(
     baseline: RuleSet,
     candidate: RuleSet,
     skills: list[dict[str, float]] | None = None,
+    fixed_lineups: bool = False,
 ) -> Analysis:
     """Turn baseline/candidate season pairs into the numbers that answer the question."""
     diffs: list[MatchupDiff] = []
@@ -383,6 +385,7 @@ def compare(
         starts_by_position=starts_by_position,
         by_team_skill=_team_effects(pairs, skills),
         comparable_lineups=baseline.lineup.starters == candidate.lineup.starters,
+        fixed_lineups=fixed_lineups,
     )
 
 
