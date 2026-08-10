@@ -6,25 +6,67 @@ them on the league.
 The problem this solves: a house rule that sounds fun often turns out to decide games.
 "Defense gives up 40+ points → −40" and "kicker hits a 50+ yard FG → 50 points" are
 swings larger than a typical margin of victory, so whoever triggers them wins
-regardless of how well they drafted or managed. This tool measures that before the
-season instead of discovering it in week 6.
+regardless of how well they drafted or managed. This measures that before the season
+instead of discovering it in week 6.
 
-## Status
+Built for one 10-team family league, but nothing is specific to it beyond
+`rules/base_yahoo.yaml`.
 
-Under construction. Working today: the persisted NFL data store, a stat registry at
-full parity with Yahoo's Scoring Settings page (all 74 categories, including the ones
-disabled by default), and the YAML rule sets and scorer built on top.
-
-The tool answers the question it was built for:
+## Setup
 
 ```bash
-uv run fantasy-tool evaluate \
-    --base rules/base_yahoo.yaml --candidate rules/house_2026.yaml \
-    --seasons 2019-2024 --leagues 20
+uv sync
+uv run fantasy-tool sync --seasons 2018-2025   # one time, ~15s, ~1.6MB
+uv run fantasy-tool stats                      # the registry, as a settings page
 ```
 
-Each league is generated once from the baseline and simulated twice, so both runs
-share a draft, a schedule, and lineups — the only difference is the rules.
+`sync` downloads nflverse data, computes every derived field, and writes one parquet
+file per season under `data/`. Simulations read only that store and never touch the
+network. Re-running is a no-op; `--force` refreshes.
+
+We persist *stats*, never *scores* — scores are the output of the rules under test, so
+they get recomputed on every run.
+
+Set `NFLREADPY_CACHE=filesystem NFLREADPY_CACHE_DIR=.cache` to cache the raw nflverse
+downloads between syncs.
+
+## The workflow
+
+```bash
+# 1. Describe a candidate rule set (extends the baseline, lists only what changes)
+uv run fantasy-tool validate rules/house_2026.yaml
+
+# 2. Measure what it would have done, over thousands of synthetic league-seasons
+uv run fantasy-tool evaluate --base rules/base_yahoo.yaml \
+    --candidate rules/house_2026.yaml --seasons 2019-2024 --leagues 20
+
+# 3. If it's too swingy, find a magnitude that isn't
+uv run fantasy-tool sweep --base rules/base_yahoo.yaml --candidate rules/house_2026.yaml \
+    --param "def_blowout_penalty.penalty=-4,-8,-12,-20,-40"
+
+# 4. Sanity-check it against the league's own history
+uv run fantasy-tool yahoo-evaluate --league 2024:583648 \
+    --base rules/base_yahoo.yaml --candidate rules/league_2026.yaml
+```
+
+### All commands
+
+| | |
+|---|---|
+| `sync` | download NFL stats into the local store |
+| `stats` | list every scoring category, as a settings page |
+| `info` | what's in the store |
+| `validate` | parse a rule set and print what it enables |
+| `score` | score one week — an eyeball check that rules do what you meant |
+| `sim` | replay one synthetic league-season, print the table |
+| `evaluate` | measure a candidate against a baseline |
+| `sweep` | try a range of values for a parameter |
+| `balance` | measure and solve position values |
+| `flatten` | resolve an `extends` chain into one standalone file |
+| `yahoo-auth` | log in once, by hand, and save the session |
+| `yahoo-probe` | fetch one page and report what's in it |
+| `yahoo-season` | download a real league-season |
+| `yahoo-evaluate` | replay real seasons under two rule sets |
 
 ## Reading the verdict
 
@@ -41,152 +83,52 @@ very different frequencies.
 | 10–25% | **SPICY** | adds variance without taking over |
 | < 10% | **FLAVOR** | mostly cosmetic |
 
-Plus a **LOTTERY TICKET** flag for rules that fire in under 2% of team-weeks but
-decide the game when they do. That is arguably the worst failure mode and a flip rate
-alone can't see it.
+Plus a **LOTTERY TICKET** flag for rules firing in under 2% of team-weeks that decide
+the game when they do — arguably the worst failure mode, and invisible to a flip rate.
 
-Every rate carries a Wilson interval, because sample size is the whole problem here: a
-rule firing 6% of the time in one season gives four events.
+Every rate carries a Wilson interval, because sample size is the whole problem: a rule
+firing 6% of the time in one season gives four events.
 
 **Size alone doesn't make a rule decisive — asymmetry does.** A thousand points to
 every team's kicker moves every score enormously and changes no result. The tool
 measures that correctly as no swing at all, and there's a test for it, because
 "generous participation bonus" is a shape real house rules take.
 
-## Finding a magnitude
-
-Knowing a rule is too swingy is half an answer. `sweep` gives the other half, running
-the same leagues across a range of values so the number is chosen from evidence:
-
-```bash
-uv run fantasy-tool sweep --base rules/base_yahoo.yaml --candidate rules/house_2026.yaml \
-    --param "def_blowout_penalty.penalty=-4,-8,-12,-20,-40"
-```
-
-```
-Setting        Fires  Avg pts  vs margin  Decides  Flips games  Verdict
-penalty=-4      4.1%     +4.0       0.2x     8.2%         0.3%  FLAVOR
-penalty=-8      4.1%     +8.0       0.3x    16.3%         0.7%  SPICY
-penalty=-12     4.1%    +12.0       0.5x    24.6%         1.0%  SPICY
-penalty=-20     4.1%    +20.0       0.8x    38.7%         1.6%  HIGH SWING
-penalty=-40     4.1%    +40.0       1.6x    67.6%         2.6%  AUTO-DECIDE
-```
-
-Repeat `--param` to sweep a grid — magnitude against rarity is the usual pair, since
-a rule has two independent dials: what it's worth when it fires, and how often it
-fires at all.
-
-Leagues are generated once and reused across every setting, so rows are directly
-comparable and a sweep costs little more than a single evaluation. When a single
-parameter is swept the flip rate should move monotonically with it; if it doesn't,
-noise is beating signal and the tool says so rather than letting you rank on it.
-
-If *every* setting decides games, the sweep says so and recommends nothing. That is
-the honest answer: the rule needs rethinking, not tuning.
-
-## How the simulation is calibrated
-
-A simulator that runs cleanly but produces a league behaving nothing like real fantasy
-football would give confident, wrong answers. The headline metric is a rule's swing
-measured against a typical margin of victory, so the margin has to be right.
-
-| | target | why |
-|---|---|---|
-| median margin of victory | 20–25 | the denominator of every verdict |
-| lineup efficiency | 85–90% | higher means hindsight, lower means noise |
-| season points spread | 1.5–2× | best team vs worst |
-
-All three are asserted in `tests/test_sim.py`.
-
-Getting there needed four corrections worth remembering, each of which produced a
-league that *looked* fine:
-
-- **Draft on value over replacement, not raw points.** A quarterback outscores nearly
-  everyone, but you start one and the waiver wire has another nearly as good. Ranking
-  on raw value builds rosters with three quarterbacks and three receivers that then
-  can't field a legal lineup.
-- **Scale manager error to the data.** Draft value has a spread of about 3 points;
-  noise was set at 14. The draft was effectively random, which produced rosters that
-  couldn't score. Both noise terms are now multiples of the observed spread, so they
-  stay calibrated when the scoring rules change.
-- **The draft board must include breakouts.** Trimming it by prior-season value alone
-  excludes everyone who breaks out this year — precisely the players who make lineups
-  good. Membership now looks at both seasons; draft *order* still uses only the prior
-  one, so breakouts go late and reward whoever took the flyer.
-- **Managers know byes, not outcomes.** The stat feed only carries players who recorded
-  something, so absence means "didn't produce", not "didn't play". Bye weeks are
-  derived exactly (a team is on bye iff its defense has no row), and a blank non-bye
-  week counts as a zero — which is how a manager notices a player has stopped
-  producing and benches him.
-
-## Setup
-
-```bash
-uv sync
-uv run fantasy-tool sync --seasons 2018-2024   # one time, ~12s, ~1.4MB
-uv run fantasy-tool info
-uv run fantasy-tool stats                      # the registry, as a settings page
-```
-
-`sync` downloads nflverse data, computes every derived field, and writes one parquet
-file per season under `data/`. Simulations read only that store and never touch the
-network. Re-running is a no-op; `--force` refreshes.
-
-We persist *stats*, never *scores* — scores are the output of the rules under test,
-so they get recomputed on every run.
-
-Set `NFLREADPY_CACHE=filesystem NFLREADPY_CACHE_DIR=.cache` to cache the raw nflverse
-downloads between syncs.
-
-## Rule sets
+## Writing rules
 
 `rules/base_yahoo.yaml` is the league's current settings. A category is enabled by
-giving it a value; anything omitted is switched off in Yahoo.
+giving it a value; anything omitted is switched off in Yahoo. Candidates use
+`extends:` and list only what changes; `null` turns a category off. Chains are allowed
+(`base` → `superflex` → `balanced`), applied root first.
 
-```bash
-uv run fantasy-tool validate rules/base_yahoo.yaml
-uv run fantasy-tool score --rules rules/base_yahoo.yaml --season 2024 --week 1 --position K
+Yardage goes under `yards_per_point`, in the units Yahoo's settings page asks for:
+
+```yaml
+yards_per_point:
+  receiving_yards: 7.5   # "7.5 yards = 1 point", exactly as typed into Yahoo
 ```
 
-A candidate rule set starts from `extends: base_yahoo.yaml` and lists only what
-changes; setting a category to `null` turns it off. The merge is one level deep on
-purpose, so a candidate always reads as "the base, plus these specific changes".
+There is no box for 0.1325 a yard, so a config written that way can't be transcribed.
+Both spellings score identically; a category may not be given both ways.
 
 Validation is deliberately strict, because a typo that silently scored zero would
 corrupt an analysis while looking entirely plausible. Unknown categories are rejected
-with a suggestion, bonuses are held to Yahoo's limits (three tiers, and only on
+with a suggestion, bonuses are held to Yahoo's limits (three tiers, only on
 passing/rushing/receiving yards), and the 26-category offensive cap is enforced.
 
-## Custom rules
-
-Yahoo can only multiply a stat by a number and add three yardage bonuses. Anything
-conditional — a penalty past a threshold, a boost that depends on the standings, a
-streak — has to be Python. A rule takes one player-week in context and returns a point
-delta; `rules/house_2026.py` holds the current candidates.
+For anything Yahoo can't express — a penalty past a threshold, a boost that depends on
+the standings, a streak — write Python. `rules/house_2026.py` holds the current set:
 
 ```python
 @rule("fg_long_bonus", positions=["K"])
 def fg_long_bonus(ctx: RuleContext) -> float:
     """Big bonus for a long field goal."""
-    made = sum(
-        1 for y in ctx.line.events.get("fg_made_yards", ()) if y >= ctx.param("min_yards", 50)
-    )
+    made = sum(1 for y in ctx.line.events.get("fg_made_yards", ())
+               if y >= ctx.param("min_yards", 50))
     return ctx.param("bonus", 50.0) * made
 ```
 
-Enable it from YAML, where every threshold is a parameter so magnitudes can be swept
-later without editing code:
-
-```yaml
-custom_rules:
-  modules: [house_2026.py]
-  enabled:
-    fg_long_bonus: {min_yards: 50, bonus: 50}
-```
-
-The context carries the player's line and base points, the manager's own starters,
-this week's opposing starters, and every completed week. Two constraints are
-deliberate:
+Two constraints in the rule context are deliberate:
 
 - **Rules see teammates and opponents base-scored only**, never another rule's output,
   so rules are order-independent and there is no "which one ran first" class of bug.
@@ -196,76 +138,170 @@ deliberate:
 Prefer `.base` over `.total` when reading history for anything streak-shaped, or the
 bonus ends up feeding the streak that earns it.
 
+## Balancing positions
+
+`balance` measures the average startable player at each position and solves for
+increases that even them out — useful when a flex slot should be position-neutral.
+
+```bash
+uv run fantasy-tool balance --rules rules/superflex_qwr.yaml --premium none
+```
+
+It balances only the positions that actually compete for a flex slot. A position with
+nothing but a dedicated slot doesn't need balancing: every team starts exactly one, so
+scoring less is symmetric and costs nobody. That single observation is what let the
+league's tight-end problem be solved by taking tight ends *out* of the flex rather than
+by paying them more — Yahoo has no per-position multipliers, and tight ends are
+out-produced by receivers on every shared receiving stat, so no native change can close
+that gap.
+
+## Real league history
+
+Yahoo has no API access here, so lineups are scraped. Log in once, by hand:
+
+```bash
+uv run playwright install chromium
+uv run fantasy-tool yahoo-auth                      # a browser opens; log in
+uv run fantasy-tool yahoo-season 583648 --season 2024
+```
+
+Past seasons need that season's league id — Yahoo issues a new one at every renewal —
+and live under a year-prefixed path.
+
+Yahoo supplies **who started whom, and nothing else**. Every point is recomputed from
+nflverse under whichever rules are being tested, which matters because the league's own
+scoring changed year to year; the 2024 pages score categories the 2026 settings don't
+have. That also means a real-season replay measures **scoring changes only**: what a
+different *roster* would have produced is unknowable from lineups set under the old one.
+
+Everything is cached to disk on first fetch, so re-parsing never re-downloads.
+
 ## Scoring conventions
 
-These are judgment calls that materially change how often a rule fires. Documented
-here because they're the first thing to check when a number looks wrong.
+Judgment calls that materially change how often a rule fires. First thing to check when
+a number looks wrong.
 
 **Points allowed** counts *all* points the opposing NFL team scored, including their
-defensive and special-teams touchdowns. This matches Yahoo, and it surprises people:
-a pick-six thrown by the quarterback your D/ST is facing still counts against your
-D/ST. Directly determines how often a "40+ points allowed" rule triggers.
+defensive and special-teams touchdowns. This matches Yahoo, and it surprises people: a
+pick-six thrown by the quarterback your D/ST is facing still counts against your D/ST.
 
-**Yards allowed** is total net yards, the official convention: gross passing yards,
-less sack yardage, plus rushing. Note that nflreadpy stores `sack_yards_lost` as a
-*negative* number, so the natural-looking `passing − sacks + rushing` silently adds
-sack yardage back and inflates every team by ~30 yards a game. Pinned to a real box
-score in `tests/test_nfl_source.py`.
+**Yards allowed** is total net yards: gross passing, less sack yardage, plus rushing.
+nflreadpy stores `sack_yards_lost` as a *negative* number, so the natural-looking
+`passing − sacks + rushing` silently adds it back and inflates every team by ~30 yards a
+game. Pinned to a real box score in the tests.
 
-**Fumbles lost** uses `fumbles_lost_total`, not the sum of the passing, rushing, and
-receiving fumble columns. Return-game and aborted-snap fumbles land only in the total.
+**Fumbles lost** uses `fumbles_lost_total`, not the sum of the positional columns —
+return-game and aborted-snap fumbles land only in the total.
 
-**Where Yahoo is coarser than nflreadpy**, we aggregate down to match Yahoo: a single
-`fg_made_50_` bucket (nflreadpy splits 50-59 and 60+), and a single
-`two_pt_conversions` category (nflreadpy splits passing/rushing/receiving).
+**Points and yards allowed are scored as bands, not lookups.** Yahoo models each band
+as its own on/off category, so they're stored as 0/1 indicators. Scoring is then a plain
+sum of `multiplier × stat` with no tier machinery.
 
-**Kick distances** come from `fg_made_list`, which is *semicolon*-delimited (`"29;31"`).
-Exact yardages are preserved per kick, so a rule can bucket kicks any way it likes —
-50+, 55+, per-yard — without touching play-by-play.
-
-**Points allowed and yards allowed are scored as bands, not lookups.** Yahoo models
-each band ("Points Allowed 28-34") as its own on/off category with its own value, so
-we store them as 0/1 indicator stats. Scoring is then a plain sum of
-`multiplier x stat` with no tier machinery, and a band a league leaves disabled — like
-Points Allowed 21-27 in this league — is simply absent from the YAML.
-
-**Thirteen categories need play-by-play**, not the weekly tables: long *touchdowns*
-(as distinct from long plays), touchdowns split by how the ball was turned over, and
-drive-level defensive stops. These are derived in `sources/pbp.py` at sync time.
+**Thirteen categories need play-by-play**: long *touchdowns* as distinct from long
+plays, touchdowns split by how the ball was turned over, and drive-level defensive
+stops. Derived in `sources/pbp.py` at sync time.
 
 **Laterals break the obvious derivation of long touchdowns.** Goff to St. Brown for 1
-yard, lateral to Williams for 41 and the score, is a 42-yard *passing* touchdown but
-not a 40-yard *receiving* touchdown for St. Brown. Ball-carrier categories therefore
-require the player to have actually scored, not just to have been on the play.
+yard, lateral to Williams for 41 and the score, is a 42-yard *passing* touchdown but not
+a 40-yard *receiving* touchdown for St. Brown. Ball-carrier categories require the
+player to have actually scored.
 
-**A kicker is not confined to kicking categories.** Yahoo's Offense / Kickers / Defense
-headings organise the settings page; they don't restrict who can earn what. Fake field
-goals are in the data — Chris Boswell threw a touchdown, Jason Sanders caught one, Jake
-Elliott threw an interception — and Yahoo pays out for all of them. The only real
-boundary is between players and team D/ST units, which are different kinds of entity.
+**A kicker is not confined to kicking categories.** Yahoo's Offense / Kickers headings
+organise the settings page; they don't restrict who earns what. Fake field goals are in
+the data — Boswell threw a touchdown, Sanders caught one, Elliott threw an interception.
+The only real boundary is players versus team D/ST units.
+
+**D/ST "Touchdown" means any defensive score.** nflverse's `def_tds` counts interception
+returns only — it matched our pick-six count exactly, to the row — so it's rebuilt from
+interception, fumble and blocked-kick returns. Kick and punt returns stay out; Yahoo
+scores those separately.
 
 **nflverse's own `fantasy_points_ppr` uses a narrower fumble rule than Yahoo**, summing
-the three positional fumble columns and so missing return fumbles. That difference is
-the *only* permitted disagreement in the scoring oracle test, which checks every
-offensive player-week across every synced season (~45,000 lines) and requires each
-mismatch to be explained exactly by it.
+the positional columns and so missing return fumbles. That is the *only* permitted
+disagreement in the scoring oracle, which checks every offensive player-week across
+every synced season (~45,000 lines) and requires each mismatch to be explained by it.
+
+## How the simulation is calibrated
+
+A simulator that runs cleanly but produces a league behaving nothing like real fantasy
+football gives confident, wrong answers. The headline metric is a rule's swing measured
+against a typical margin of victory, so the margin has to be right.
+
+| | target | why |
+|---|---|---|
+| median margin of victory | 20–25 | the denominator of every verdict |
+| lineup efficiency | 85–90% | higher means hindsight, lower means noise |
+| season points spread | 1.5–2× | best team vs worst |
+
+All asserted in `tests/test_sim.py`. Four corrections were needed, each of which
+produced a league that *looked* fine:
+
+- **Draft on value over replacement, not raw points.** A quarterback outscores nearly
+  everyone, but you start one and the waiver wire has another nearly as good. Ranking
+  on raw value builds rosters with three quarterbacks and three receivers that then
+  can't field a legal lineup.
+- **Scale manager error to the data.** Draft value has a spread of about 3 points; noise
+  was set at 14. The draft was effectively random. Both noise terms are now multiples of
+  the observed spread, so they stay calibrated when the rules change.
+- **The draft board must include breakouts.** Trimming by prior-season value alone
+  excludes everyone who breaks out this year — precisely the players who make lineups
+  good. Membership considers both seasons; draft *order* still uses only the prior one.
+- **Managers know byes, not outcomes.** The stat feed only carries players who recorded
+  something, so absence means "didn't produce", not "didn't play". Byes are derived
+  exactly (a team is on bye iff its defense has no row).
+
+Known gaps: no trades, no injury replacement beyond streaming, and real managers work
+the waiver wire harder than simulated ones — measured against the league's own seasons,
+the model under-scores by roughly 25%. Treat synthetic *magnitudes* as directional and
+*comparisons* as sound; the diff is far more robust than the levels.
+
+**Exploit resistance is tested.** A flex-heavy lineup invites hoarding one position, so
+the draft can be told to do exactly that. Any rule set where hoarding beat a normal
+draft would be one to reject: it would reward whoever noticed at the expense of everyone
+who didn't.
 
 ## Layout
 
 ```
 rules/
-├── base_yahoo.yaml   # the league's real current settings
-├── house_2026.yaml   # candidates: extends the base
-└── house_2026.py     # the Python rule bodies
+├── base_yahoo.yaml     the league's real current settings
+├── superflex*.yaml     roster experiments
+├── balanced*.yaml      position-balanced scoring
+├── league_2026.yaml    the adopted rules, flat (generated by `flatten`)
+└── house_2026.py       Python rule bodies
 
 src/fantasy_tool/
-├── cli.py            # typer commands
-├── model.py          # StatLine, TeamWeek, History: the source-agnostic contract
-├── stats.py          # the registry: a text mirror of Yahoo's settings page
-├── scoring.py        # YAML rule sets and the base scorer
-├── rules.py          # the @rule registry and RuleContext
-├── store.py          # sync / load persisted parquet
+├── cli.py              typer commands
+├── model.py            StatLine, League, TeamWeek, History — the source-agnostic contract
+├── stats.py            the registry: a text mirror of Yahoo's settings page
+├── scoring.py          YAML rule sets and the base scorer
+├── rules.py            the @rule registry and RuleContext
+├── sim.py              two-pass season replay
+├── analysis.py         counterfactual diff and the four metric families
+├── balance.py          position value measurement and the solver
+├── sweep.py            parameter sweeps
+├── harness.py          league construction shared by evaluate and sweep
+├── report.py           rich tables
+├── store.py            sync / load persisted parquet
 └── sources/
-    ├── nfl.py        # weekly tables -> StatLine (sync time only)
-    └── pbp.py        # play-by-play categories (sync time only)
+    ├── nfl.py          weekly tables -> StatLine (sync time only)
+    ├── pbp.py          play-by-play categories (sync time only)
+    ├── snaps.py        offensive snap counts (sync time only)
+    ├── synthetic.py    draft, lineups, streaming
+    └── yahoo/          auth, fetch, parse, season assembly
 ```
+
+## Tests
+
+```bash
+uv run pytest
+```
+
+The most valuable ones are the bracket tests in `tests/test_analysis.py`. A contaminated
+counterfactual produces plausible output rather than a crash, so: a null rule must
+measure as exactly nothing, a rule paying both sides equally must flip nothing, and an
+asymmetric rule worth a thousand points a kick must read as decisive.
+
+Determinism is a contract and is checked across processes, not just within one — Python
+randomises string hashing per run, and iterating a set of position names once made the
+same seed produce different leagues in different processes.

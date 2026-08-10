@@ -12,6 +12,11 @@ Names collide, change, and are rendered with suffixes and injury markers attache
 id in an href is unambiguous, and nflverse publishes a Yahoo-to-gsis crosswalk so it
 maps straight onto the stats everything else is built from.
 
+This parses the *personal* matchup page, which Yahoo renders for the logged-in user
+whatever team id is asked for. A whole league's lineups come from `season.py` instead.
+What this page uniquely provides is Yahoo's own scores, which is what makes the
+scraper checkable: our totals have to match the ones Yahoo printed.
+
 Nothing here touches the network.
 """
 

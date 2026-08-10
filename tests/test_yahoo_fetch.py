@@ -132,13 +132,6 @@ def test_cache_keys_describe_the_page_not_the_url(scraper: fetch.Scraper) -> Non
     assert page.path.parent.name == "w05"
 
 
-def test_season_pages_fetches_each_matchup_once(scraper: fetch.Scraper) -> None:
-    """Each matchup page shows both lineups, so only odd team ids are needed."""
-    pages = list(fetch.season_pages(scraper, LEAGUE, 2023, teams=10, weeks=range(1, 3)))
-    assert len(pages) == 2 * 5  # two weeks, five matchups apiece
-    assert all("/2023/f1/" in url for url in scraper._client.calls)
-
-
 # --------------------------------------------------------------- session
 
 

@@ -11,7 +11,6 @@ empty league that looks like a real one.
 """
 
 import time
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
@@ -24,9 +23,6 @@ DEFAULT_CACHE = Path("data/yahoo/pages")
 # Yahoo publishes no rate limit for the web tier. A full league history is a few
 # thousand pages; at this pace that's about an hour and invisible to anyone.
 DELAY_SECONDS = 1.5
-
-# Pre-2012 "Plus" leagues live under f2 instead of f1.
-GAME_PATHS = ("f1", "f2")
 
 
 class SessionExpired(RuntimeError):
@@ -60,8 +56,10 @@ def matchup_url(
 ) -> str:
     """A team's matchup page for one week.
 
-    The most efficient page available: it renders *both* lineups with per-player
-    points, so a league-week costs half as many requests as fetching each team.
+    Note this page is *personal*: Yahoo ignores the team id and renders the logged-in
+    user's own matchup whatever you ask for. It is useful for one thing only -- it
+    prints Yahoo's own scores, which is how the parser is validated -- and a whole
+    league's lineups come from `season.starters_url` instead.
     """
     return league_url(league_id, season, f"{team_id}/matchup?week={week}", game)
 
@@ -136,27 +134,3 @@ def check_response(final_url: str, html: str) -> None:
         )
     if "The document you requested was not found" in html:
         raise FileNotFoundError(f"Yahoo says this page doesn't exist: {final_url}")
-
-
-def season_pages(
-    scraper: Scraper,
-    league_id: str,
-    season: int | None,
-    teams: int,
-    weeks: range,
-    game: str = "f1",
-    refresh: bool = False,
-) -> Iterator[Page]:
-    """Every matchup page for a season.
-
-    Only odd-numbered teams are fetched: each matchup page shows both lineups, so
-    fetching every team would download each matchup twice.
-    """
-    label = season or "current"
-    for week in weeks:
-        for team_id in range(1, teams + 1, 2):
-            yield scraper.get(
-                matchup_url(league_id, team_id, week, season, game),
-                key=f"{label}/w{week:02d}/t{team_id:02d}",
-                refresh=refresh,
-            )
