@@ -205,9 +205,27 @@ def test_the_recommended_setup_needs_no_custom_rules() -> None:
     for key, value in base.points.items():
         if key in balanced.points:
             assert balanced.points[key] >= value - 1e-9, key
-    # Tight end has a slot of its own and shares none.
+    # Tight end has a slot of its own. Yahoo's superflex also lets one into the flex,
+    # which the balancing deliberately ignores -- see the config, and
+    # test_a_tight_end_never_wins_a_flex_slot below for why that is safe.
     from fantasy_tool.model import parse_slots
 
     slots = parse_slots(balanced.lineup.starters)
     assert any(s.label == "TE" for s in slots)
-    assert not any("TE" in s.eligible and s.is_flex for s in slots)
+    assert any("TE" in s.eligible and s.is_flex for s in slots)
+
+
+def test_tight_ends_are_too_far_back_to_contest_a_flex_slot() -> None:
+    """Why levelling three of the four flex-eligible positions is enough.
+
+    Yahoo's superflex admits tight ends, and the adopted scoring leaves them out of the
+    solve anyway, on the grounds that they never actually win one of those slots. That
+    is a claim about the size of the gap, so it is measured rather than assumed: under
+    the adopted rules the startable tight end pool sits a clear touchdown a game behind
+    the best of the other three. Close that to within a couple of points and the
+    reasoning stops holding, and this fails.
+    """
+    balanced = load_ruleset(RULES_DIR / "balanced_qwr.yaml")
+    profiles = profile(SEASONS, balanced, LEVERS, top_n=startable_pool(10))
+    best_of_the_rest = max(profiles[p].mean_points for p in ("QB", "RB", "WR"))
+    assert profiles["TE"].mean_points < best_of_the_rest - 6

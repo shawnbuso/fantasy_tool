@@ -1,13 +1,28 @@
 # The recommended setup: superflex-style roster, positions balanced, no custom rules.
 #
-# Four flex slots shared by QB, RB and WR, with tight end on its own dedicated slot.
+# One dedicated slot at each offensive position plus four flex slots. Yahoo has no
+# QB/RB/WR flex -- its superflex admits tight ends as well -- so the flex is Q/W/R/T
+# and the balancing below covers only the three positions that actually contend for
+# it.
+#
+# Leaving tight end out of the solve is a measurement rather than an assumption.
+# Tight ends are out-produced by receivers on every shared receiving stat and Yahoo
+# has no per-position multiplier, so no native change closes that gap. What makes it
+# harmless is that the gap is too wide for a tight end to win a flex slot: over
+# 2019-2024 the average TE1 scores like WR13 and TE4 like WR31, against a marginal
+# flex starter worth about 15 points a game, and in simulation tight ends take 4.7%
+# of flex slots -- nearly all of them bye-week patches worth 5 points. Every team
+# starts exactly one tight end in the slot that demands one, so the shortfall is
+# symmetric and costs nobody, the same way a kicker scoring less than a running back
+# bothers no one.
+#
 # Full PPR, plus two yardage changes that bring the three flex-competing positions to
 # the same average. Both are increases; nothing is reduced.
 #
 # All native Yahoo settings, so it scores itself with no weekly bookkeeping.
 
-extends: superflex_qwr.yaml
-name: "Balanced superflex (QB/RB/WR flex), full PPR"
+extends: superflex.yaml
+name: "Balanced superflex (QB/RB/WR levelled), full PPR"
 
 # Fewer yards per point means more points per yard -- these are increases.
 yards_per_point:

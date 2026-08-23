@@ -123,8 +123,9 @@ the standings, a streak — write Python. `rules/house_2026.py` holds the curren
 @rule("fg_long_bonus", positions=["K"])
 def fg_long_bonus(ctx: RuleContext) -> float:
     """Big bonus for a long field goal."""
-    made = sum(1 for y in ctx.line.events.get("fg_made_yards", ())
-               if y >= ctx.param("min_yards", 50))
+    made = sum(
+        1 for y in ctx.line.events.get("fg_made_yards", ()) if y >= ctx.param("min_yards", 50)
+    )
     return ctx.param("bonus", 50.0) * made
 ```
 
@@ -144,16 +145,22 @@ bonus ends up feeding the streak that earns it.
 increases that even them out — useful when a flex slot should be position-neutral.
 
 ```bash
-uv run fantasy-tool balance --rules rules/superflex_qwr.yaml --premium none
+uv run fantasy-tool balance --rules rules/league_2026.yaml --positions QB,RB,WR --premium none
 ```
 
-It balances only the positions that actually compete for a flex slot. A position with
-nothing but a dedicated slot doesn't need balancing: every team starts exactly one, so
-scoring less is symmetric and costs nobody. That single observation is what let the
-league's tight-end problem be solved by taking tight ends *out* of the flex rather than
-by paying them more — Yahoo has no per-position multipliers, and tight ends are
-out-produced by receivers on every shared receiving stat, so no native change can close
-that gap.
+By default it balances every position the flex admits. A position with nothing but a
+dedicated slot doesn't need balancing: every team starts exactly one, so scoring less
+is symmetric and costs nobody.
+
+`--positions` extends that to a position which is *eligible* for the flex without ever
+winning one, which is how the league's tight-end problem is handled. Yahoo has no
+per-position multipliers and tight ends are out-produced by receivers on every shared
+receiving stat, so no native change can close that gap — but the gap is wide enough
+that closing it is unnecessary. Over 2019–2024 the average TE1 scores like WR13 and
+TE4 like WR31, against a marginal flex starter worth about 15 points a game, and in
+simulation tight ends take 4.7% of flex slots, nearly all of them bye-week patches
+worth 5 points. So every team starts one tight end in the slot that demands one, and
+the three positions that actually contend get levelled.
 
 ## Real league history
 

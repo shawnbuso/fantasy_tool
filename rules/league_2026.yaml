@@ -7,7 +7,7 @@
 name: "Four Finger Family -- 2026"
 
 lineup:
-  starters: [QB, RB, WR, TE, Q/W/R, Q/W/R, Q/W/R, Q/W/R, K, DEF]
+  starters: [QB, RB, WR, TE, Q/W/R/T, Q/W/R/T, Q/W/R/T, Q/W/R/T, K, DEF]
   bench: 6
 
 options:
