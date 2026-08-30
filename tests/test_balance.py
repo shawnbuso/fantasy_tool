@@ -215,17 +215,15 @@ def test_the_recommended_setup_needs_no_custom_rules() -> None:
     assert any("TE" in s.eligible and s.is_flex for s in slots)
 
 
-def test_tight_ends_are_too_far_back_to_contest_a_flex_slot() -> None:
-    """Why levelling three of the four flex-eligible positions is enough.
+def test_all_four_flex_positions_are_level() -> None:
+    """The point of the tight end rate: every position the flex admits is worth the same.
 
-    Yahoo's superflex admits tight ends, and the adopted scoring leaves them out of the
-    solve anyway, on the grounds that they never actually win one of those slots. That
-    is a claim about the size of the gap, so it is measured rather than assumed: under
-    the adopted rules the startable tight end pool sits a clear touchdown a game behind
-    the best of the other three. Close that to within a couple of points and the
-    reasoning stops holding, and this fails.
+    Measured on the pool a ten-team league starts when all four compete -- twenty at
+    each position. Tight ends were 8.1 points a game short before they had a rate of
+    their own, which is why they were unstartable in a flex slot; the whole exercise is
+    only worth anything if that gap is actually gone.
     """
     balanced = load_ruleset(RULES_DIR / "balanced_qwr.yaml")
-    profiles = profile(SEASONS, balanced, LEVERS, top_n=startable_pool(10))
-    best_of_the_rest = max(profiles[p].mean_points for p in ("QB", "RB", "WR"))
-    assert profiles["TE"].mean_points < best_of_the_rest - 6
+    profiles = profile(SEASONS, balanced, LEVERS, top_n=startable_pool(10, flex_share=1.0))
+    means = {p: profiles[p].mean_points for p in FLEX_POSITIONS}
+    assert max(means.values()) - min(means.values()) < 2.0, means

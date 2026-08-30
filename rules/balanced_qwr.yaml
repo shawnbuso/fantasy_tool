@@ -1,28 +1,23 @@
-# The recommended setup: superflex-style roster, positions balanced, no custom rules.
+# The recommended setup: superflex-style roster, all four positions level.
 #
-# One dedicated slot at each offensive position plus four flex slots. Yahoo has no
-# QB/RB/WR flex -- its superflex admits tight ends as well -- so the flex is Q/W/R/T
-# and the balancing below covers only the three positions that actually contend for
-# it.
+# One dedicated slot at each offensive position, plus four flex slots that take a
+# quarterback, back, receiver or tight end -- Yahoo's superflex, which is the only
+# kind it builds.
 #
-# Leaving tight end out of the solve is a measurement rather than an assumption.
-# Tight ends are out-produced by receivers on every shared receiving stat and Yahoo
-# has no per-position multiplier, so no native change closes that gap. What makes it
-# harmless is that the gap is too wide for a tight end to win a flex slot: over
-# 2019-2024 the average TE1 scores like WR13 and TE4 like WR31, against a marginal
-# flex starter worth about 15 points a game, and in simulation tight ends take 4.7%
-# of flex slots -- nearly all of them bye-week patches worth 5 points. Every team
-# starts exactly one tight end in the slot that demands one, so the shortfall is
-# symmetric and costs nobody, the same way a kicker scoring less than a running back
-# bothers no one.
+# Full PPR and two yardage raises bring quarterbacks, backs and receivers level.
+# Tight ends need a rate of their own: they are out-produced by receivers on every
+# shared receiving stat, so a raise everyone gets helps receivers more and widens the
+# gap rather than closing it. Yahoo added per-position category values for 2026, so
+# that rate is a setting now rather than a custom rule applied by hand.
 #
-# Full PPR, plus two yardage changes that bring the three flex-competing positions to
-# the same average. Both are increases; nothing is reduced.
+# Solved against 2019-2024 on the top twenty at each position -- what a ten-team
+# league starts once all four compete for the flex. Tight ends came in 8.1 points a
+# game short of the other three; 4 yards to the point closes it to 0.2.
 #
-# All native Yahoo settings, so it scores itself with no weekly bookkeeping.
+# Every change here is an increase. Nothing is reduced.
 
 extends: superflex.yaml
-name: "Balanced superflex (QB/RB/WR levelled), full PPR"
+name: "Balanced superflex -- all four positions level, full PPR"
 
 # Fewer yards per point means more points per yard -- these are increases.
 yards_per_point:
@@ -31,3 +26,8 @@ yards_per_point:
 
 scoring:
   receptions: 1.0
+
+positions:
+  TE:
+    yards_per_point:
+      receiving_yards: 4  # vs 7.5 for everyone else

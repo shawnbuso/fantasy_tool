@@ -111,6 +111,11 @@ yards_per_point:
 There is no box for 0.1325 a yard, so a config written that way can't be transcribed.
 Both spellings score identically; a category may not be given both ways.
 
+An offensive category can pay one position differently under `positions:`, matching
+Yahoo's 2026 per-position values — see [Balancing positions](#balancing-positions).
+Anything a position doesn't name falls through to the league-wide value. Unlike
+`scoring`, the block is replaced wholesale down an `extends` chain rather than merged.
+
 Validation is deliberately strict, because a typo that silently scored zero would
 corrupt an analysis while looking entirely plausible. Unknown categories are rejected
 with a suggestion, bonuses are held to Yahoo's limits (three tiers, only on
@@ -145,22 +150,37 @@ bonus ends up feeding the streak that earns it.
 increases that even them out — useful when a flex slot should be position-neutral.
 
 ```bash
-uv run fantasy-tool balance --rules rules/league_2026.yaml --positions QB,RB,WR --premium none
+uv run fantasy-tool balance --rules rules/league_2026.yaml --premium none
 ```
 
 By default it balances every position the flex admits. A position with nothing but a
 dedicated slot doesn't need balancing: every team starts exactly one, so scoring less
-is symmetric and costs nobody.
+is symmetric and costs nobody. `--positions` narrows the solve when a position is
+*eligible* for the flex but not really in contention for it.
 
-`--positions` extends that to a position which is *eligible* for the flex without ever
-winning one, which is how the league's tight-end problem is handled. Yahoo has no
-per-position multipliers and tight ends are out-produced by receivers on every shared
-receiving stat, so no native change can close that gap — but the gap is wide enough
-that closing it is unnecessary. Over 2019–2024 the average TE1 scores like WR13 and
-TE4 like WR31, against a marginal flex starter worth about 15 points a game, and in
-simulation tight ends take 4.7% of flex slots, nearly all of them bye-week patches
-worth 5 points. So every team starts one tight end in the slot that demands one, and
-the three positions that actually contend get levelled.
+Tight ends were the hard case. They're out-produced by receivers on every shared
+receiving stat, so raising a category everyone shares helps receivers more and widens
+the gap — and until 2026 Yahoo had no per-position values, which left no native way to
+close it. Tight ends averaged 8.1 points a game less than the other three, so they were
+unplayable in a flex slot: only about four a season were worth starting, and in
+simulation they took 4.7% of flex slots, nearly all bye-week patches.
+
+Yahoo's 2026 update varies each offensive category by position, which fixes it in one
+setting. `positions:` in a config mirrors that:
+
+```yaml
+yards_per_point:
+  receiving_yards: 7.5
+
+positions:
+  TE:
+    yards_per_point:
+      receiving_yards: 4   # tight ends only; everyone else stays at 7.5
+```
+
+That brings all four to within 0.8 of a point a game, and tight ends to 12.8% of flex
+slots. Loading up on them still doesn't pay — the exploit check in `tests/test_sim.py`
+covers hoarding each position, tight end included.
 
 ## Real league history
 

@@ -72,6 +72,13 @@ scoring:
   ya_100_199: 10
   ya_0_99: 30
 
+# Offensive categories that pay one position differently. Everything not
+# listed falls through to the league-wide value above.
+positions:
+  TE:
+    yards_per_point:
+      receiving_yards: 4
+
 # Cumulative: hitting the higher target pays the lower tier too.
 bonuses:
   rushing_yards:

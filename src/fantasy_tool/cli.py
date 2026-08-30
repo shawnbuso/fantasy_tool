@@ -118,6 +118,31 @@ def validate(
         tiers = ", ".join(f"{b.target:g}+ -> +{b.points:g}" for b in bonuses)
         console.print(f"Bonus on {key}: {tiers}")
 
+    if ruleset.positions:
+        console.print()
+        per_position = Table("Position", "Category", "Yahoo label", "Value", "Everyone else")
+        for position, override in ruleset.positions.items():
+            shared = ruleset.points
+            for key, value in override.scoring.items():
+                base = shared.get(key)
+                per_position.add_row(
+                    position,
+                    key,
+                    STAT_BY_KEY[key].label,
+                    f"{value:g}",
+                    f"{base:g}" if base is not None else "off",
+                )
+            for key, yards in override.yards_per_point.items():
+                base = shared.get(key)
+                per_position.add_row(
+                    position,
+                    key,
+                    STAT_BY_KEY[key].label,
+                    f"{yards:g} yards = 1 point",
+                    f"{1 / base:g} yards = 1 point" if base else "off",
+                )
+        console.print(per_position)
+
     if not ruleset.custom_rules.enabled:
         return
 
@@ -516,6 +541,23 @@ def flatten(
         body.append(f"\n  # --- {group}")
         body.extend(f"  {key}: {value:g}" for key, value in items)
 
+    per_position = ""
+    if ruleset.positions:
+        per_position = (
+            "\n# Offensive categories that pay one position differently. Everything not\n"
+            "# listed falls through to the league-wide value above.\npositions:\n"
+        )
+        for position, override in ruleset.positions.items():
+            per_position += f"  {position}:\n"
+            if override.scoring:
+                per_position += "    scoring:\n"
+                per_position += "".join(f"      {k}: {v:g}\n" for k, v in override.scoring.items())
+            if override.yards_per_point:
+                per_position += "    yards_per_point:\n"
+                per_position += "".join(
+                    f"      {k}: {v:g}\n" for k, v in override.yards_per_point.items()
+                )
+
     tiers = []
     for category, bonuses in ruleset.bonuses.items():
         tiers.append(f"  {category}:")
@@ -553,6 +595,7 @@ yards_per_point:
 
 scoring:{chr(10).join(body)}
 """
+    text += per_position
     if tiers:
         text += "\n# Cumulative: hitting the higher target pays the lower tier too.\nbonuses:\n"
         text += chr(10).join(tiers) + "\n"
