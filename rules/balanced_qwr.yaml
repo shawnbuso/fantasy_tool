@@ -1,13 +1,23 @@
-# The recommended setup: superflex-style roster, positions balanced, no custom rules.
+# The recommended setup: superflex-style roster, all four positions level.
 #
-# Four flex slots shared by QB, RB and WR, with tight end on its own dedicated slot.
-# Full PPR, plus two yardage changes that bring the three flex-competing positions to
-# the same average. Both are increases; nothing is reduced.
+# One dedicated slot at each offensive position, plus four flex slots that take a
+# quarterback, back, receiver or tight end -- Yahoo's superflex, which is the only
+# kind it builds.
 #
-# All native Yahoo settings, so it scores itself with no weekly bookkeeping.
+# Full PPR and two yardage raises bring quarterbacks, backs and receivers level.
+# Tight ends need a rate of their own: they are out-produced by receivers on every
+# shared receiving stat, so a raise everyone gets helps receivers more and widens the
+# gap rather than closing it. Yahoo added per-position category values for 2026, so
+# that rate is a setting now rather than a custom rule applied by hand.
+#
+# Solved against 2019-2024 on the top twenty at each position -- what a ten-team
+# league starts once all four compete for the flex. Tight ends came in 8.1 points a
+# game short of the other three; 4 yards to the point closes it to 0.2.
+#
+# Every change here is an increase. Nothing is reduced.
 
-extends: superflex_qwr.yaml
-name: "Balanced superflex (QB/RB/WR flex), full PPR"
+extends: superflex.yaml
+name: "Balanced superflex -- all four positions level, full PPR"
 
 # Fewer yards per point means more points per yard -- these are increases.
 yards_per_point:
@@ -16,3 +26,8 @@ yards_per_point:
 
 scoring:
   receptions: 1.0
+
+positions:
+  TE:
+    yards_per_point:
+      receiving_yards: 4  # vs 7.5 for everyone else

@@ -76,6 +76,7 @@ class Scraper:
         import httpx
 
         self.cache_dir = cache_dir
+        self.state_path = state_path
         self.delay = delay
         self._last_request = 0.0
         self._client = httpx.Client(
@@ -113,14 +114,14 @@ class Scraper:
         self._last_request = time.monotonic()
 
         response = self._client.get(url)
-        check_response(str(response.url), response.text)
+        check_response(str(response.url), response.text, self.state_path)
 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(response.text)
         return Page(url=url, path=path, html=response.text, from_cache=False)
 
 
-def check_response(final_url: str, html: str) -> None:
+def check_response(final_url: str, html: str, state_path: Path | None = None) -> None:
     """Refuse anything that isn't the page we asked for.
 
     Yahoo answers an unauthenticated request with a redirect to login rather than an
@@ -128,9 +129,14 @@ def check_response(final_url: str, html: str) -> None:
     league where every lineup was empty.
     """
     if "login.yahoo.com" in final_url:
+        # Name the file that was actually read. Session paths are relative to the
+        # working directory, so logging in from the wrong one writes a perfectly good
+        # session somewhere nothing looks -- and the old wording ("re-run yahoo-auth")
+        # sent you straight back round the same loop.
+        where = f" at {state_path.resolve()}" if state_path else ""
         raise SessionExpired(
-            "Yahoo redirected to the login page -- the session has expired. "
-            "Re-run `fantasy-tool yahoo-auth`."
+            f"Yahoo redirected to the login page -- the session{where} is not valid. "
+            "Re-run `fantasy-tool yahoo-auth` from the project root."
         )
     if "The document you requested was not found" in html:
         raise FileNotFoundError(f"Yahoo says this page doesn't exist: {final_url}")

@@ -405,6 +405,65 @@ def test_a_category_cannot_be_given_both_ways() -> None:
         )
 
 
+def test_a_category_can_pay_one_position_differently() -> None:
+    """New for 2026, and the whole reason tight ends are startable in the flex.
+
+    The same production scores differently depending on who produced it, and every
+    category the position doesn't name still falls through to the league-wide value.
+    """
+    rules = RuleSet(
+        name="x",
+        lineup={"starters": ["WR", "TE"]},
+        scoring={"receptions": 1},
+        yards_per_point={"receiving_yards": 7.5},
+        positions={"TE": {"yards_per_point": {"receiving_yards": 4}}},
+    )
+    stats = {"receiving_yards": 60.0, "receptions": 5.0}
+    assert score_base(_line("WR", **stats), rules) == pytest.approx(60 / 7.5 + 5)
+    assert score_base(_line("TE", **stats), rules) == pytest.approx(60 / 4 + 5)
+    # Untouched categories are shared, and nobody else is affected.
+    assert rules.points_for("TE")["receptions"] == rules.points["receptions"]
+    assert rules.points_for("RB") == rules.points
+    assert rules.points_for(None) == rules.points
+
+
+def test_only_offensive_categories_vary_by_position() -> None:
+    """Yahoo's per-position values cover the offensive categories and nothing else."""
+    with pytest.raises(ValidationError, match="not an offensive category"):
+        RuleSet(
+            name="x",
+            lineup={"starters": ["TE"]},
+            positions={"TE": {"scoring": {"def_sacks": 2}}},
+        )
+
+
+def test_only_offensive_positions_can_have_their_own_scoring() -> None:
+    with pytest.raises(ValidationError, match="can't have its own scoring"):
+        RuleSet(
+            name="x",
+            lineup={"starters": ["K"]},
+            positions={"K": {"scoring": {"receptions": 2}}},
+        )
+
+
+def test_offense_cap_counts_each_position_separately() -> None:
+    """A position's own list is what Yahoo caps, not the union across positions."""
+    from fantasy_tool.stats import MAX_OFFENSE_CATEGORIES, STATS
+
+    offense = sorted(s.key for s in STATS if s.section == "Offense" and s.supported)
+    legal = dict.fromkeys(offense[:MAX_OFFENSE_CATEGORIES], 1.0)
+    RuleSet(name="x", lineup={"starters": ["TE"]}, scoring=legal)  # at the cap, fine
+
+    extra = next(k for k in offense if k not in legal)
+    with pytest.raises(ValidationError, match="enabled for TE"):
+        RuleSet(
+            name="x",
+            lineup={"starters": ["TE"]},
+            scoring=legal,
+            positions={"TE": {"scoring": {extra: 1.0}}},
+        )
+
+
 def test_the_league_configs_use_yahoo_units() -> None:
     """What the configs say should be transcribable straight into the settings page."""
     base = load_ruleset(RULES_DIR / "base_yahoo.yaml")
@@ -429,6 +488,7 @@ def test_consolidated_league_matches_the_layered_configs() -> None:
     flat = load_ruleset(RULES_DIR / "league_2026.yaml")
 
     assert flat.points == layered.points
+    assert flat.positions == layered.positions
     assert flat.lineup.starters == layered.lineup.starters
     assert flat.lineup.bench == layered.lineup.bench
     assert flat.custom_rules.enabled == layered.custom_rules.enabled

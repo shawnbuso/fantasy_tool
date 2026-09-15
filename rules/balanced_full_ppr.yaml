@@ -4,10 +4,13 @@
 # Only increases: nothing below is lower than Yahoo's default. Quarterbacks score the
 # most and can't be reduced, so they set the target the other three climb to.
 #
-# The tight end premium is a custom rule because Yahoo cannot do it. Its categories
-# apply to every player alike, and tight ends are out-produced by receivers on every
-# per-game receiving stat -- so raising a shared category helps receivers more and
-# widens the gap rather than closing it.
+# The tight end premium is a custom rule here because Yahoo could not do it when this
+# was solved: its categories applied to every player alike, and tight ends are
+# out-produced by receivers on every per-game receiving stat, so raising a shared
+# category helps receivers more and widens the gap rather than closing it. Yahoo added
+# per-position category values for 2026 -- see the `positions` block in
+# balanced_qwr.yaml -- and the adopted rules use that. These three are kept as the
+# original solve, and as the worked example of a custom rule.
 
 extends: superflex.yaml
 name: "Balanced superflex -- 1 PPR"

@@ -118,6 +118,31 @@ def validate(
         tiers = ", ".join(f"{b.target:g}+ -> +{b.points:g}" for b in bonuses)
         console.print(f"Bonus on {key}: {tiers}")
 
+    if ruleset.positions:
+        console.print()
+        per_position = Table("Position", "Category", "Yahoo label", "Value", "Everyone else")
+        for position, override in ruleset.positions.items():
+            shared = ruleset.points
+            for key, value in override.scoring.items():
+                base = shared.get(key)
+                per_position.add_row(
+                    position,
+                    key,
+                    STAT_BY_KEY[key].label,
+                    f"{value:g}",
+                    f"{base:g}" if base is not None else "off",
+                )
+            for key, yards in override.yards_per_point.items():
+                base = shared.get(key)
+                per_position.add_row(
+                    position,
+                    key,
+                    STAT_BY_KEY[key].label,
+                    f"{yards:g} yards = 1 point",
+                    f"{1 / base:g} yards = 1 point" if base else "off",
+                )
+        console.print(per_position)
+
     if not ruleset.custom_rules.enabled:
         return
 
@@ -379,6 +404,9 @@ def balance(
     premium: Annotated[
         str, typer.Option(help="POSITION.stat scored for that position only")
     ] = "TE.receiving_yards",
+    positions: Annotated[
+        str, typer.Option(help="Positions to level; default is everything the flex admits")
+    ] = "",
     root: Annotated[Path, typer.Option(help="Store location")] = store.DEFAULT_ROOT,
 ) -> None:
     """Measure whether positions are worth the same, and solve for increases that even them.
@@ -404,15 +432,31 @@ def balance(
     # Only positions competing for a flex slot need balancing. One with nothing but a
     # dedicated slot is started once by every team, so scoring less costs nobody.
     _, flex = lineup_shape(parse_slots(ruleset.lineup.starters))
-    competing = tuple(p for p in FLEX_POSITIONS if any(p in slot.eligible for slot in flex))
-    if not competing:
+    eligible = tuple(p for p in FLEX_POSITIONS if any(p in slot.eligible for slot in flex))
+    if not eligible:
         console.print("[yellow]No flex slots in this lineup, so no position competes.[/yellow]")
         raise typer.Exit(1)
 
+    # Eligible for the flex is not the same as competing for it. A position far enough
+    # behind that it never wins a slot is in the same position as one with no flex
+    # eligibility at all -- every team starts its one and the shortfall is symmetric --
+    # so `--positions` narrows the solve to the ones actually in contention.
+    competing = eligible
+    if positions:
+        competing = tuple(p.strip().upper() for p in positions.split(",") if p.strip())
+        unknown = [p for p in competing if p not in FLEX_POSITIONS]
+        if unknown:
+            console.print(f"[red]Not flex positions: {', '.join(unknown)}[/red]")
+            raise typer.Exit(1)
+
     pool = startable_pool(teams, flex_share=len(flex) / len(competing))
+    note = ""
+    if set(competing) != set(eligible):
+        left_out = ", ".join(p for p in eligible if p not in competing)
+        note = f" The flex also admits {left_out}, left out of the solve on purpose."
     console.print(
         f"[dim]Balancing {', '.join(competing)} -- the positions sharing "
-        f"{len(flex)} flex slot(s). Others are started once by everyone.[/dim]"
+        f"{len(flex)} flex slot(s). Others are started once by everyone.{note}[/dim]"
     )
 
     table = Table(title=f"Points per game, top {pool} at each position", title_justify="left")
@@ -497,6 +541,23 @@ def flatten(
         body.append(f"\n  # --- {group}")
         body.extend(f"  {key}: {value:g}" for key, value in items)
 
+    per_position = ""
+    if ruleset.positions:
+        per_position = (
+            "\n# Offensive categories that pay one position differently. Everything not\n"
+            "# listed falls through to the league-wide value above.\npositions:\n"
+        )
+        for position, override in ruleset.positions.items():
+            per_position += f"  {position}:\n"
+            if override.scoring:
+                per_position += "    scoring:\n"
+                per_position += "".join(f"      {k}: {v:g}\n" for k, v in override.scoring.items())
+            if override.yards_per_point:
+                per_position += "    yards_per_point:\n"
+                per_position += "".join(
+                    f"      {k}: {v:g}\n" for k, v in override.yards_per_point.items()
+                )
+
     tiers = []
     for category, bonuses in ruleset.bonuses.items():
         tiers.append(f"  {category}:")
@@ -534,6 +595,7 @@ yards_per_point:
 
 scoring:{chr(10).join(body)}
 """
+    text += per_position
     if tiers:
         text += "\n# Cumulative: hitting the higher target pays the lower tier too.\nbonuses:\n"
         text += chr(10).join(tiers) + "\n"
@@ -557,12 +619,21 @@ def yahoo_auth(
     """
     from .sources.yahoo.auth import capture
 
+    # Every path here is relative to the working directory, so logging in from a
+    # subdirectory silently writes the session somewhere no other command reads.
+    if not Path("pyproject.toml").exists():
+        console.print(
+            f"[yellow]Warning:[/yellow] {Path.cwd()} doesn't look like the project "
+            "root, so this session will be saved somewhere other commands won't find "
+            "it. Run this from the directory containing pyproject.toml."
+        )
+
     try:
         written = capture(state)
     except ImportError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
-    console.print(f"[green]Saved session to[/green] {written}")
+    console.print(f"[green]Saved session to[/green] {written.resolve()}")
 
 
 @app.command("yahoo-probe")

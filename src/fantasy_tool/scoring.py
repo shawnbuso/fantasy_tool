@@ -24,12 +24,46 @@ from .stats import (
     BONUS_ELIGIBLE,
     MAX_BONUSES_PER_CATEGORY,
     MAX_OFFENSE_CATEGORIES,
+    OFF,
     STAT_BY_KEY,
     YARDAGE_KEYS,
     suggest,
 )
 
 MERGED_SECTIONS = ("scoring", "yards_per_point", "bonuses")
+
+
+def _check_scoring(value: dict[str, float]) -> dict[str, float]:
+    for key in value:
+        stat = STAT_BY_KEY.get(key)
+        if stat is None:
+            raise ValueError(f"unknown scoring category {key!r}.{suggest(key)}")
+        if not stat.supported:
+            raise ValueError(f"{key!r} ({stat.label}) is not scoreable from the store")
+    return value
+
+
+def _check_yards_per_point(value: dict[str, float]) -> dict[str, float]:
+    for key, yards in value.items():
+        stat = STAT_BY_KEY.get(key)
+        if stat is None:
+            raise ValueError(f"unknown scoring category {key!r}.{suggest(key)}")
+        if key not in YARDAGE_KEYS:
+            raise ValueError(
+                f"{key!r} ({stat.label}) isn't measured in yards, so yards-per-point "
+                f"makes no sense for it. Put it under `scoring`."
+            )
+        if yards <= 0:
+            raise ValueError(f"{key!r}: yards per point must be positive, got {yards}")
+    return value
+
+
+def _as_points(scoring: dict[str, float], yards_per_point: dict[str, float]) -> dict[str, float]:
+    """Both spellings, resolved to points per unit."""
+    merged = dict(scoring)
+    for key, yards in yards_per_point.items():
+        merged[key] = 1.0 / yards
+    return merged
 
 
 class Bonus(BaseModel):
@@ -50,6 +84,53 @@ class Lineup(BaseModel):
     model_config = ConfigDict(extra="forbid")
     starters: list[str]
     bench: int = 6
+
+
+class PositionScoring(BaseModel):
+    """What one position scores differently from everyone else.
+
+    Yahoo added this for 2026: the offensive categories can each carry a different
+    value per position. Before that, a category applied to every player alike, which
+    is why a tight end could not be paid more per catch than a receiver without a
+    custom rule and a weekly hand adjustment.
+
+    Only the categories named here differ; everything else falls through to the
+    league-wide value.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    scoring: dict[str, float] = Field(default_factory=dict)
+    yards_per_point: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("scoring")
+    @classmethod
+    def _known_and_scoreable(cls, value: dict[str, float]) -> dict[str, float]:
+        return _check_scoring(value)
+
+    @field_validator("yards_per_point")
+    @classmethod
+    def _yardage_categories_only(cls, value: dict[str, float]) -> dict[str, float]:
+        return _check_yards_per_point(value)
+
+    @model_validator(mode="after")
+    def _offense_only_and_unambiguous(self) -> "PositionScoring":
+        clash = set(self.scoring) & set(self.yards_per_point)
+        if clash:
+            raise ValueError(
+                f"{', '.join(sorted(clash))} given both as points-per-yard and "
+                f"yards-per-point; pick one"
+            )
+        for key in self.points:
+            if STAT_BY_KEY[key].section != "Offense":
+                raise ValueError(
+                    f"{key!r} ({STAT_BY_KEY[key].label}) is not an offensive category. "
+                    f"Yahoo varies only offensive categories by position."
+                )
+        return self
+
+    @property
+    def points(self) -> dict[str, float]:
+        return _as_points(self.scoring, self.yards_per_point)
 
 
 class CustomRules(BaseModel):
@@ -73,33 +154,30 @@ class RuleSet(BaseModel):
     # without anyone doing arithmetic and getting it wrong.
     yards_per_point: dict[str, float] = Field(default_factory=dict)
     bonuses: dict[str, list[Bonus]] = Field(default_factory=dict)
+    # Offensive categories that pay one position differently from the rest. New for
+    # 2026; before that every category applied to every player alike.
+    positions: dict[str, PositionScoring] = Field(default_factory=dict)
     custom_rules: CustomRules = Field(default_factory=CustomRules)
 
     @field_validator("scoring")
     @classmethod
     def _known_and_scoreable(cls, value: dict[str, float]) -> dict[str, float]:
-        for key in value:
-            stat = STAT_BY_KEY.get(key)
-            if stat is None:
-                raise ValueError(f"unknown scoring category {key!r}.{suggest(key)}")
-            if not stat.supported:
-                raise ValueError(f"{key!r} ({stat.label}) is not scoreable from the store")
-        return value
+        return _check_scoring(value)
 
     @field_validator("yards_per_point")
     @classmethod
     def _yardage_categories_only(cls, value: dict[str, float]) -> dict[str, float]:
-        for key, yards in value.items():
-            stat = STAT_BY_KEY.get(key)
-            if stat is None:
-                raise ValueError(f"unknown scoring category {key!r}.{suggest(key)}")
-            if key not in YARDAGE_KEYS:
+        return _check_yards_per_point(value)
+
+    @field_validator("positions")
+    @classmethod
+    def _real_positions(cls, value: dict[str, PositionScoring]) -> dict[str, PositionScoring]:
+        for position in value:
+            if position not in OFF:
                 raise ValueError(
-                    f"{key!r} ({stat.label}) isn't measured in yards, so yards-per-point "
-                    f"makes no sense for it. Put it under `scoring`."
+                    f"{position!r} can't have its own scoring. Yahoo varies categories by "
+                    f"position for {', '.join(sorted(OFF))} only."
                 )
-            if yards <= 0:
-                raise ValueError(f"{key!r}: yards per point must be positive, got {yards}")
         return value
 
     @field_validator("bonuses")
@@ -127,12 +205,15 @@ class RuleSet(BaseModel):
                 f"{', '.join(sorted(clash))} given both as points-per-yard and "
                 f"yards-per-point; pick one"
             )
-        offense = [k for k in self.points if STAT_BY_KEY[k].section == "Offense"]
-        if len(offense) > MAX_OFFENSE_CATEGORIES:
-            raise ValueError(
-                f"{len(offense)} offensive categories enabled; Yahoo caps this at "
-                f"{MAX_OFFENSE_CATEGORIES}"
-            )
+        for position in (None, *sorted(self.positions)):
+            enabled = self.points_for(position)
+            offense = [k for k in enabled if STAT_BY_KEY[k].section == "Offense"]
+            if len(offense) > MAX_OFFENSE_CATEGORIES:
+                whose = f"for {position}" if position else "league-wide"
+                raise ValueError(
+                    f"{len(offense)} offensive categories enabled {whose}; Yahoo caps "
+                    f"this at {MAX_OFFENSE_CATEGORIES}"
+                )
         for key in self.bonuses:
             if key not in self.points:
                 raise ValueError(f"bonus on {key!r} but that category isn't enabled")
@@ -140,11 +221,19 @@ class RuleSet(BaseModel):
 
     @property
     def points(self) -> dict[str, float]:
-        """Every enabled category as points per unit, whichever way it was written."""
-        merged = dict(self.scoring)
-        for key, yards in self.yards_per_point.items():
-            merged[key] = 1.0 / yards
-        return merged
+        """Every league-wide category as points per unit, whichever way it was written."""
+        return _as_points(self.scoring, self.yards_per_point)
+
+    def points_for(self, position: str | None) -> dict[str, float]:
+        """The same, as this position is actually paid.
+
+        Anything the position doesn't override falls through to the league-wide value,
+        so a config lists only the differences -- which is also how Yahoo's page reads.
+        """
+        override = self.positions.get(position or "")
+        if override is None:
+            return self.points
+        return {**self.points, **override.points}
 
     @property
     def starter_count(self) -> int:
@@ -157,7 +246,9 @@ def _merge(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     Deliberately not recursive *within* a section: a rule set should read as "the one
     it extends, plus these specific changes", and deep-merge semantics make that
     harder to reason about than they're worth. To turn a category off, set it to null.
-    Sections other than those two are replaced wholesale.
+    Sections other than those two are replaced wholesale -- `positions` included, so a
+    file that varies scoring by position restates the whole block rather than editing
+    one line of a parent's.
     """
     merged = dict(parent)
     for section, value in child.items():
@@ -265,15 +356,17 @@ def score_base(line: StatLine, rules: RuleSet) -> float:
     """Points this player-week earns under the YAML rules alone.
 
     Every enabled category contributes `multiplier * stat`, plus any threshold
-    bonuses. The only category a line is excluded from is one belonging to the other
-    kind of entity: team-defense categories never apply to a player, and player
-    categories never apply to a team unit. Notably a kicker is *not* restricted to
-    kicking categories -- fake field goals happen, and Yahoo pays out for them.
+    bonuses. Multipliers come from `points_for`, so an offensive category that pays
+    this position differently is picked up here. The only category a line is excluded
+    from is one belonging to the other kind of entity: team-defense categories never
+    apply to a player, and player categories never apply to a team unit. Notably a
+    kicker is *not* restricted to kicking categories -- fake field goals happen, and
+    Yahoo pays out for them.
     """
     total = 0.0
     is_team_unit = line.position == "DEF"
 
-    for key, multiplier in rules.points.items():
+    for key, multiplier in rules.points_for(line.position).items():
         stat = STAT_BY_KEY[key]
         if stat.is_team_defense != is_team_unit:
             continue

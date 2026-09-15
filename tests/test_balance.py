@@ -205,9 +205,25 @@ def test_the_recommended_setup_needs_no_custom_rules() -> None:
     for key, value in base.points.items():
         if key in balanced.points:
             assert balanced.points[key] >= value - 1e-9, key
-    # Tight end has a slot of its own and shares none.
+    # Tight end has a slot of its own. Yahoo's superflex also lets one into the flex,
+    # which the balancing deliberately ignores -- see the config, and
+    # test_a_tight_end_never_wins_a_flex_slot below for why that is safe.
     from fantasy_tool.model import parse_slots
 
     slots = parse_slots(balanced.lineup.starters)
     assert any(s.label == "TE" for s in slots)
-    assert not any("TE" in s.eligible and s.is_flex for s in slots)
+    assert any("TE" in s.eligible and s.is_flex for s in slots)
+
+
+def test_all_four_flex_positions_are_level() -> None:
+    """The point of the tight end rate: every position the flex admits is worth the same.
+
+    Measured on the pool a ten-team league starts when all four compete -- twenty at
+    each position. Tight ends were 8.1 points a game short before they had a rate of
+    their own, which is why they were unstartable in a flex slot; the whole exercise is
+    only worth anything if that gap is actually gone.
+    """
+    balanced = load_ruleset(RULES_DIR / "balanced_qwr.yaml")
+    profiles = profile(SEASONS, balanced, LEVERS, top_n=startable_pool(10, flex_share=1.0))
+    means = {p: profiles[p].mean_points for p in FLEX_POSITIONS}
+    assert max(means.values()) - min(means.values()) < 2.0, means

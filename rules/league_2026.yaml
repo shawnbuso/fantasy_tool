@@ -7,7 +7,7 @@
 name: "Four Finger Family -- 2026"
 
 lineup:
-  starters: [QB, RB, WR, TE, Q/W/R, Q/W/R, Q/W/R, Q/W/R, K, DEF]
+  starters: [QB, RB, WR, TE, Q/W/R/T, Q/W/R/T, Q/W/R/T, Q/W/R/T, K, DEF]
   bench: 6
 
 options:
@@ -71,6 +71,13 @@ scoring:
   # --- Defense/Special Teams / Yards Allowed
   ya_100_199: 10
   ya_0_99: 30
+
+# Offensive categories that pay one position differently. Everything not
+# listed falls through to the league-wide value above.
+positions:
+  TE:
+    yards_per_point:
+      receiving_yards: 4
 
 # Cumulative: hitting the higher target pays the lower tier too.
 bonuses:

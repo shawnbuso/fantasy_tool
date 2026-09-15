@@ -80,8 +80,11 @@ def cookies(state_path: Path = DEFAULT_STATE, host: str = FANTASY_HOST) -> dict[
     the header from around 12KB to 3KB.
     """
     if not state_path.exists():
+        # Absolute, because the usual cause is a session saved from a different working
+        # directory -- the relative path looks correct from anywhere and hides the bug.
         raise FileNotFoundError(
-            f"No saved session at {state_path}. Run `fantasy-tool yahoo-auth` first."
+            f"No saved session at {state_path.resolve()}. "
+            "Run `fantasy-tool yahoo-auth` from the project root."
         )
     state = json.loads(state_path.read_text())
     return {
