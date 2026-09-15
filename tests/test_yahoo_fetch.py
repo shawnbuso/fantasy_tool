@@ -57,6 +57,19 @@ def test_login_redirect_is_an_error_not_data() -> None:
         fetch.check_response("https://login.yahoo.com/?done=...", "<html>Sign in</html>")
 
 
+def test_expiry_names_the_session_file_it_used(tmp_path) -> None:
+    """The error has to say *which* session failed, as an absolute path.
+
+    Session paths are relative to the working directory, so logging in from the wrong
+    one saves a perfectly valid session somewhere no other command reads. The old
+    message just said "re-run yahoo-auth", which sends you round the same loop.
+    """
+    state = tmp_path / "somewhere-else" / "session.json"
+    with pytest.raises(fetch.SessionExpired) as caught:
+        fetch.check_response("https://login.yahoo.com/?done=...", "<html>Sign in</html>", state)
+    assert str(state.resolve()) in str(caught.value)
+
+
 def test_missing_page_is_reported_as_missing() -> None:
     with pytest.raises(FileNotFoundError):
         fetch.check_response(

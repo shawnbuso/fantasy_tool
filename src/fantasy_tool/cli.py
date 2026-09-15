@@ -619,12 +619,21 @@ def yahoo_auth(
     """
     from .sources.yahoo.auth import capture
 
+    # Every path here is relative to the working directory, so logging in from a
+    # subdirectory silently writes the session somewhere no other command reads.
+    if not Path("pyproject.toml").exists():
+        console.print(
+            f"[yellow]Warning:[/yellow] {Path.cwd()} doesn't look like the project "
+            "root, so this session will be saved somewhere other commands won't find "
+            "it. Run this from the directory containing pyproject.toml."
+        )
+
     try:
         written = capture(state)
     except ImportError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
-    console.print(f"[green]Saved session to[/green] {written}")
+    console.print(f"[green]Saved session to[/green] {written.resolve()}")
 
 
 @app.command("yahoo-probe")
