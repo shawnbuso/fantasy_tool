@@ -6,3 +6,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 yahoo_state.json
+
+# The recap's private material: real names, real family, real roast angles.
+.claude/skills/weekly-recap/league-context.local.md
+.claude/skills/weekly-recap/recaps/
