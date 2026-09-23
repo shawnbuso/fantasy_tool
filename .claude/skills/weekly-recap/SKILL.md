@@ -173,7 +173,7 @@ column — these people see each other at Christmas.
   owned, scored after the fact. Either say so in passing or use a phrasing that carries
   itself.
 - **Everyone gets hit, including whoever is writing.** Self-deprecation is what buys the
-  licence to go after everyone else, so never let the author's own loss pass quietly.
+  license to go after everyone else, so never let the author's own loss pass quietly.
 - **Use the family.** Every matchup in this league has a relationship behind it —
   brothers, father-son, in-laws. The dossier has the map. A recap that ignores it has
   thrown away the entire premise.
@@ -181,6 +181,12 @@ column — these people see each other at Christmas.
   every week kills them inside a month. Two or three, and rotate.
 - **Punch at decisions, not at people.** Bad lineup calls, benched studs, draft picks
   made by someone's eight-year-old. Never anything real.
+- **American spelling, always.** This is an American family in an American football
+  league: *offense*, *defense*, *color*, *license*, *humor*, *neighborhood*, *toward*,
+  *canceled*, *gray*. British forms read as an affectation from a narrator who is
+  supposed to be one of them, and "74% of Arizona's offence" is the kind of thing that
+  gets noticed immediately. (The repo's own source uses British spellings in places;
+  that is the codebase's business and not the recap's.)
 - **No gendered language for the managers.** Not "a man posted the week's best score",
   not "the most football-literate man in the league", not "the guy who wrote the rules".
   The league is not all men, and those constructions quietly say it is. Reach for
@@ -201,7 +207,7 @@ by Halloween. Four mechanisms, all in the dossier:
 **The bit ledger.** A table of every recurring joke with the week it last appeared.
 Read it before writing. A bit used last week is banned this week and shouldn't return
 inside three. Update the table when you're done. At most **two** evergreen bits in any
-one recap — the rest of the humour has to come from what actually happened.
+one recap — the rest of the humor has to come from what actually happened.
 
 **A different lens each week.** Don't structure every recap the same way. Rotate the
 angle the week is viewed through, and don't reuse one inside a month:
@@ -241,6 +247,12 @@ uv run python .claude/skills/weekly-recap/scripts/verify_numbers.py \
     --data  .claude/skills/weekly-recap/recaps/week-NN.json
 ```
 
+Pass `--also` with every earlier week's JSON, or legitimate callbacks to September
+figures read as fabricated in November. Note the cost: the allowed set grows with each
+week added (416 values for one week, 713 for two), and the false-pass rate on random
+plausible figures rose from 2.5% to 4.0% between them. It will keep climbing, so the
+comparison pass below matters more as the season goes on, not less.
+
 It accepts player points and projections, team totals, margins, bench figures, snap
 counts and real NFL game scores, plus sensible roundings — "lost by 46" for 46.12 is
 fine. Anything else is printed. A flagged number is not automatically wrong: a genuine
@@ -249,14 +261,50 @@ is computed from two real figures and will be flagged every time. **Recompute ea
 flagged line from the JSON and confirm it.** An empty list is the only result that needs
 no thought.
 
-**Pass two — the claims, which no script can check.** The linter validates *figures*,
-not *comparisons*. In week 1 a draft went out saying someone's bench outscored four
+**Pass two — the comparison pass. Write it out and show the user.** The linter validates
+*figures*, not *comparisons*, and comparisons are where this actually goes wrong: week 2
+shipped a draft claiming two tight ends outscored several teams' entire lineups (they
+scored 67.00; the lowest team total was 145.48) and calling someone the best lineup
+manager in the league when he was third. Both numbers in those sentences were real.
+
+So before publishing, list every comparative claim in the draft, write a one-line check
+for each against the JSON, run them, and print the result. Not "I checked" — the actual
+table, with the losing values shown next to the winning one:
+
+```
+OK   best start of the week            (55.67), next (47.00)
+OK   third-fewest points               [268.56, 302.96, 315.60, 325.53]
+>>>  best lineup in the league         season avg: 98.1, 95.9, 95.8  <- claimed team is 3rd
+```
+
+The third line there is a real error the pass caught after the figures had already come
+back clean. **Scope is the usual failure**, and it has now caused three separate corrections.
+"Best in the league" is a season claim in a power-ranking or standings section and a
+weekly claim in a matchup writeup, and a sentence true of one gets pasted into the other.
+
+**Every efficiency, ranking or superlative must name its window in the sentence** —
+*this week*, *across the two weeks*, *on the season*. An unqualified one is a bug even
+when the underlying number is right: week 2 opened with "the worst-managed lineup won"
+(a weekly figure, unattributed) and ranked another team "second most efficient in the
+league"
+(a season figure) four paragraphs apart, and the two read as a flat contradiction. Both
+were true. Neither said so.
+
+Naming the team also helps. "The worst-managed one won by 37" makes the reader guess;
+"<team> started 81.2% and won by 37" cannot be misread.
+
+**An ordinal must also say what it ranks.** "Tenth to second in a week" sounds like a
+climb up the standings; it meant lowest score in the league one week and second-highest
+the next, while the team sat eighth in the table the whole time. Weekly scoring rank,
+standings position, all-play and efficiency are four different orderings and a bare
+ordinal could be any of them. Say which — "lowest score in the league", "eighth in the
+standings", "13-5 against the field" — or don't use the number. In week 1 a draft went out saying someone's bench outscored four
 teams' entire lineups; the bench figure was correct and the comparison was invented, and
 the linter would have passed it. So every superlative and every comparison gets computed
 from the data, never estimated:
 
 > highest · lowest · best · worst · most · fewest · closest · biggest · "more than N
-> teams" · "the only" · "first since" · any ranking or ordinal
+> teams" · "the only" · "first since" · "outscored X" · any ranking or ordinal
 
 Write the one-line check and run it. `max()` over a list is five seconds and it is the
 difference between a recap the league trusts and one somebody fact-checks in the group

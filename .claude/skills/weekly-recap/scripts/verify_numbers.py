@@ -26,8 +26,14 @@ SAFE_INTEGERS = set(range(21)) | {2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025
 NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?![\w%])")
 
 
-def allowed_values(data: dict) -> dict[float, str]:
-    """Every number the recap is entitled to use, and where it came from."""
+def allowed_values(*weeks: dict) -> dict[float, str]:
+    """Every number the recap is entitled to use, and where it came from.
+
+    Pass earlier weeks too. A recap in October legitimately cites September figures --
+    a callback to someone's bench in week 1, a season-long total -- and without the
+    history every one of those reads as fabricated, which trains you to ignore the
+    warnings. That is worse than not checking.
+    """
     found: dict[float, str] = {}
 
     def add(value, source: str) -> None:
@@ -36,6 +42,18 @@ def allowed_values(data: dict) -> dict[float, str]:
         number = round(float(value), 2)
         found.setdefault(number, source)
 
+    # Running totals across every week supplied, so season figures reconcile.
+    season: dict[str, dict[str, float]] = {}
+    for data in weeks:
+        for team in data["teams"]:
+            running = season.setdefault(team["team_name"], {"points": 0.0, "bench": 0.0})
+            running["points"] += team["points"]
+            running["bench"] += team["left_on_bench"]
+    for name, running in season.items():
+        add(round(running["points"], 2), f"{name} season points")
+        add(round(running["bench"], 2), f"{name} season bench")
+
+    data = weeks[-1]
     for team in data["teams"]:
         name = team["team_name"]
         for field in (
@@ -65,6 +83,17 @@ def allowed_values(data: dict) -> dict[float, str]:
             for score in re.findall(r"(\d+)-(\d+)", player.get("game", "")):
                 add(int(score[0]), f"{player['name']} game score")
                 add(int(score[1]), f"{player['name']} game score")
+
+    for older in weeks[:-1]:
+        for team in older["teams"]:
+            label = f"{team['team_name']} (earlier week)"
+            for field in ("points", "raw_points", "optimal", "left_on_bench", "efficiency"):
+                add(team.get(field), f"{label}.{field}")
+            for player in team["starters"] + team["bench"]:
+                add(player["points"], f"{player['name']} (earlier week)")
+                add(player["projected"], f"{player['name']} projected (earlier week)")
+        for matchup in older["matchups"]:
+            add(matchup["margin"], "margin (earlier week)")
 
     for matchup in data["matchups"]:
         add(matchup["margin"], "margin")
@@ -99,11 +128,19 @@ def matches(number: float, allowed: dict[float, str]) -> str | None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recap", type=Path, required=True)
-    parser.add_argument("--data", type=Path, required=True)
+    parser.add_argument("--data", type=Path, required=True, help="This week's JSON")
+    parser.add_argument(
+        "--also",
+        type=Path,
+        nargs="*",
+        default=[],
+        help="Earlier weeks' JSON, so callbacks and season totals reconcile",
+    )
     args = parser.parse_args()
 
-    data = json.loads(args.data.read_text())
-    allowed = allowed_values(data)
+    weeks = [json.loads(f.read_text()) for f in args.also]
+    weeks.append(json.loads(args.data.read_text()))
+    allowed = allowed_values(*weeks)
     text = args.recap.read_text()
     # The notes section is addressed to the author, not the league, and cites
     # before-and-after figures that no longer exist in the current data.
