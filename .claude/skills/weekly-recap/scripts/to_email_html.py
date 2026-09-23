@@ -20,14 +20,23 @@ from pathlib import Path
 
 # One place to change the look. Georgia because it renders well in every mail client
 # and reads less like a memo than the sans-serif default.
-BODY = "font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:640px;"
-H1 = "font-family:Georgia,serif;font-size:24px;font-weight:700;margin:0 0 4px;color:#111;"
+# Every color is stated outright, including the backgrounds. A browser in dark mode
+# will otherwise invert the page, and the inverted colors are what land on the
+# clipboard -- white-on-black pasted into a white email.
+BODY = (
+    "font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.55;"
+    "color:#1a1a1a;background:#ffffff;max-width:640px;"
+)
+H1 = "font-family:Georgia,serif;font-size:24px;font-weight:700;margin:0 0 4px;color:#111111;"
 H2 = "font-family:Georgia,serif;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a6d3b;margin:28px 0 10px;border-bottom:1px solid #e0d8c8;padding-bottom:5px;"
-H3 = "font-family:Georgia,serif;font-size:17px;font-weight:700;margin:20px 0 6px;color:#111;"
+H3 = "font-family:Georgia,serif;font-size:17px;font-weight:700;margin:20px 0 6px;color:#111111;"
 P = "margin:0 0 14px;"
 LI = "margin:0 0 7px;"
-TH = "text-align:left;padding:6px 10px;border-bottom:2px solid #8a6d3b;font-size:13px;font-weight:700;"
-TD = "padding:5px 10px;border-bottom:1px solid #eee;font-size:14px;"
+TH = (
+    "text-align:left;padding:6px 10px;border-bottom:2px solid #8a6d3b;font-size:13px;"
+    "font-weight:700;color:#1a1a1a;background:#ffffff;"
+)
+TD = "padding:5px 10px;border-bottom:1px solid #eeeeee;font-size:14px;color:#1a1a1a;background:#ffffff;"
 HR = "border:0;border-top:1px solid #e0d8c8;margin:26px 0;"
 
 
@@ -154,12 +163,43 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recap", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--fragment",
+        action="store_true",
+        help="Emit body content only, for publishing as an Artifact (which supplies its "
+        "own document shell). Markdown artifacts follow the viewer's theme and go dark; "
+        "an HTML fragment that paints every color itself does not.",
+    )
     args = parser.parse_args()
     body, subject = convert(args.recap.read_text())
+
+    if args.fragment:
+        # Artifacts supply their own document shell, so emit content only. A *Markdown*
+        # artifact is rendered with claude.ai's own theme-aware stylesheet and turns
+        # dark with the viewer; an HTML fragment that paints every color itself keeps
+        # the page light regardless, which is what makes it safe to copy from.
+        args.out.write_text(
+            "<title>Weekly recap</title>\n"
+            "<style>:root{color-scheme:only light}"
+            "html,body{background:#ffffff !important;color:#1a1a1a !important;margin:0}"
+            "</style>\n"
+            f"<div style='background:#ffffff;padding:28px 24px;'>{body}</div>\n"
+        )
+        print(f"wrote {args.out} (artifact fragment)")
+        if subject:
+            print(f"\nSubject line:  {subject}")
+        return
+
+    # `color-scheme: only light` is what actually stops Chrome and Brave applying their
+    # automatic dark treatment. Without it the page renders inverted and the inverted
+    # colors are what get copied.
     args.out.write_text(
-        "<!doctype html><meta charset='utf-8'>"
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+        "<meta name='color-scheme' content='light only'>"
         "<title>Weekly recap</title>"
-        "<body style='margin:32px;background:#fff;'>" + body + "</body>"
+        "<style>:root{color-scheme:only light}"
+        "html,body{background:#ffffff;color:#1a1a1a}</style></head>"
+        "<body style='margin:32px;background:#ffffff;color:#1a1a1a'>" + body + "</body></html>"
     )
     print(f"wrote {args.out}")
     if subject:

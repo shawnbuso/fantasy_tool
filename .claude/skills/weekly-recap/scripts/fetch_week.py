@@ -238,7 +238,7 @@ def positions(season: int) -> tuple[dict[str, str], dict[str, str]]:
     return by_id, by_name
 
 
-def trophy_detail(season: int, week: int, names: list[str]) -> dict[str, dict]:
+def trophy_detail(season: int, week: int, names: list[str]) -> tuple[dict[str, dict], bool]:
     """What a participation-trophy player actually did to earn nothing.
 
     "Scored exactly zero" is only half the joke; the other half is how much football
@@ -246,15 +246,17 @@ def trophy_detail(season: int, week: int, names: list[str]) -> dict[str, dict]:
     man who was on the field for 87% of a 59-point win and caught nothing.
     """
     if not names:
-        return {}
+        return {}, True
     import nflreadpy as nfl
     import polars as pl
 
     wanted = {_key(n): n for n in names}
     detail: dict[str, dict] = {n: {} for n in names}
+    snaps_known = False
 
     try:
         snaps = nfl.load_snap_counts(season).filter(pl.col("week") == week)
+        snaps_known = snaps.height > 0
         for row in snaps.select("player", "offense_snaps", "offense_pct").iter_rows(named=True):
             name = wanted.get(_key(row["player"] or ""))
             if name:
@@ -274,7 +276,7 @@ def trophy_detail(season: int, week: int, names: list[str]) -> dict[str, dict]:
     except Exception as exc:  # noqa: BLE001
         print(f"  (no player stats: {exc})", file=sys.stderr)
 
-    return detail
+    return detail, snaps_known
 
 
 def resolve_position(player: dict, by_id: dict[str, str], by_name: dict[str, str]) -> str:
@@ -523,11 +525,22 @@ def build(
 
     # Enrich the trophies once, for the whole league, rather than per team.
     everyone = [n for r in records.values() for n in r["participation_trophy"]]
-    detail = trophy_detail(season or CURRENT_SEASON, week, everyone)
+    detail, snaps_known = trophy_detail(season or CURRENT_SEASON, week, everyone)
     for record in records.values():
-        record["participation_trophy"] = [
-            {"name": n, **detail.get(n, {})} for n in record["participation_trophy"]
-        ]
+        awarded = []
+        for name in record["participation_trophy"]:
+            found = detail.get(name, {})
+            # The rule needs at least one offensive snap. A player who was inactive
+            # also shows 0.00 rather than "-", so scoring zero is not enough on its
+            # own -- Puka Nacua sat out week 2 entirely and read as a qualifier.
+            # Absent from the snap table means he didn't take the field.
+            if snaps_known and not found.get("offense_snaps"):
+                continue
+            awarded.append({"name": name, **found, "snaps_confirmed": snaps_known})
+        record["participation_trophy"] = awarded
+        record["adjustment_explained"] = (
+            abs(record["adjustment"] - TROPHY_POINTS * len(awarded)) < 0.01
+        )
 
     scores = sorted(records.values(), key=lambda r: -r["points"])
     return {
