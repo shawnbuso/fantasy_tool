@@ -151,12 +151,37 @@ Team A 142.60 — Team B 88.12
 Witty, tongue-in-cheek, affectionate. The target is a family group text, not a Deadspin
 column — these people see each other at Christmas.
 
+**Read `recaps/week-01-recap.md` before drafting.** It is the benchmark the league liked
+best, and week 3 drew the verdict "lost a bit of its edge since week 1 — very data-heavy
+and less fun and jokey." The drift is gradual and invisible from inside a single week, so
+the comparison has to be made deliberately. What week 1 had and week 3 had lost:
+
+- **First person.** Week 1: "Full disclosure: I write this recap and I also posted the
+  highest score in the league, and I'd like that noted as a coincidence." … "My defense
+  scored negative two and I won by 46." Week 3 retreated into the third person — "the
+  person writing the recap put up 218.31", "he also left Jeremiyah Love's 24.78 on his own
+  bench" — which reads as arch and administrative. **The narrator is a cousin at the back
+  booth, not a wire service.** Say *I*, say *my*, and address the league directly: "Make of
+  that what you will."
+- **A turn after every number.** Week 1: "Ja'Marr Chase turning in 3.60 against a 24.54
+  projection — a line so quiet that starting the Chargers defense instead would have cost
+  him 2.6 points." Week 3: "projected for 165.94, scored 129.90, and lost by
+  88.41." Identical number *count*; one has a joke in it. See the budget rule below.
+- **Jokes with a second beat.** "His kicker scored 1.00. His defense also scored 1.00,
+  which at least shows commitment to a theme." The flat fact, then the reframe.
+
+The craft rules themselves:
+
 - **Four to five sentences per matchup, and lean long rather than short.** Tested
   against the league's own judgment: given the same joke in a three-sentence and a
   five-sentence version, the longer one won nearly every time. Brevity is not the
   virtue here — a joke needs room on both sides of it.
 - **Numbers are not a budget.** A number doing *joke* work is free; a number doing
-  *inventory* work is expensive. "Starting the Chargers defense instead would have cost
+  *inventory* work is expensive. **The count was never the problem — week 1 and week 3
+  carry about the same density, and only week 3 reads like a spreadsheet.** The test is
+  per-number and mechanical: after each figure, is there a turn? A consequence, a reframe,
+  a counterfactual, a joke? Three numbers in a row with no turn between them is a ledger
+  entry, however true each one is. "Starting the Chargers defense instead would have cost
   him 2.6 points" needs three figures and earns all three, because the precision is the
   joke — it implies somebody actually ran the counterfactual. Three players listed with
   their scores and nothing else spends the same three figures on inventory nobody can
@@ -168,6 +193,29 @@ column — these people see each other at Christmas.
   as a first beat, with one more after it, lands.
 - **Be specific.** "Left 66 on the bench" is funny. "Had a rough week" is not. Every
   barb should be anchored to something real out of the JSON.
+- **Never explain the football.** This league shares a home team and watched the games you
+  are describing. Week 3's draft spent four sentences establishing a famous backup
+  quarterback's championship run — the injury that opened it, the date, the yardage, the
+  final score, the MVP — and all of it was cut down to a parenthetical "(see: Super Bowl
+  LII)" before sending. The note back was that it should be "tongue-in-cheek, if you know
+  you know, and less overt." **A shared memory referenced glancingly is a joke; the same
+  memory explained is a Wikipedia summary**, and it tells the room you think they don't
+  remember their own championship. Land it in a clause and move on.
+- **The dead are comedy, not elegy.** The dossier's departed relatives are in there because
+  of the ridiculous things they did, and that is exactly how to use them. What does not
+  work is the affectionate-memorial register: week
+  3 opened a matchup by noting which late relatives a family tradition had been *inherited
+  from*, and the whole clause was cut before sending: it added nothing except reminding the
+  league that those people are gone, which reads as "kind of a bummer." Before invoking
+  someone who has died, check what the subtext of the sentence actually is. If it is
+  *this person is gone*, cut it. If it is *this person did something ridiculous*, keep it.
+- **Rigor in the checking, looseness in the telling.** Section 4 demands every superlative
+  name its window and every comparison be computed, and week 3 let that discipline leak
+  into the prose: "The honest footnote is that it wouldn't have mattered", "so the bench
+  isn't really the story", "There was no version of Sunday where this went differently",
+  scope qualifiers stacked into clauses nobody asked for. That is the voice of someone
+  showing their work. **Verify like an auditor, write like a cousin.** Qualify a claim once,
+  in the sentence that makes it, then get out.
 - **Explain the jargon or drop it.** "Within 3.54 points of perfect" means nothing to
   most of the league — a perfect lineup is the best legal lineup a manager already
   owned, scored after the fact. Either say so in passing or use a phrasing that carries
@@ -314,8 +362,15 @@ written it.
 
 ## 5. Save it and update the dossier
 
-Write the recap to `.claude/skills/weekly-recap/recaps/week-NN.txt` (gitignored), then
-make three updates to the dossier — all of them, every week, or the anti-repetition
+Write the recap to `.claude/skills/weekly-recap/recaps/week-NN.txt` (gitignored).
+
+**Then ask for what actually went out, and save it as `week-NN-sent.txt`.** The recap gets
+edited before sending, and those edits are the only direct read on the voice available —
+the week 3 diff produced four separate corrections that no amount of self-review had
+caught. Diff sent against drafted before writing the next week. If you haven't been told,
+ask; if it went out unchanged, note that, because that is information too.
+
+Then make three updates to the dossier — all of them, every week, or the anti-repetition
 machinery quietly stops working:
 
 1. **The bit ledger** — mark the week against every bit you used.
