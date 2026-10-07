@@ -32,8 +32,10 @@ uv run python .claude/skills/weekly-recap/scripts/fetch_week.py \
 Keep every week's JSON — the directory is gitignored, and season-long stats (who has
 been unlucky all year, whose bench keeps outscoring their lineup) need the history.
 
-Omit `--week` and it uses whatever week Yahoo is on, which is the right answer when
-run on a Monday night or Tuesday. Pass `--week N` to redo an earlier one, and
+**Pass `--week N` explicitly.** Omitting it uses whatever week Yahoo says it is on, which
+is right on a Monday night and wrong by Tuesday — the week rolls over, and week 4 was
+fetched as an unplayed week 5: every score 0.00, every starter in `unplayed`. The script
+prints the week it thinks it is ("Yahoo says this is week 5"), so read that line. Also
 `--season YYYY --week N --no-refresh` to read a finished season out of the cache.
 
 Ten pages at 1.5s apiece, so expect ~20 seconds.
@@ -103,6 +105,14 @@ on the bench" is not. Watch for the second trap too — a player is blocked by t
 his position. Week 1's draft had Likely stuck behind a tight end when the flex was the
 real answer, and understated the damage by half.
 
+**A tiny snap share on a well-projected starter is a story, not a curiosity.** The trophy
+record carries `offense_snaps` and `offense_pct`. A starter projected for double digits who
+played ~20% of the offensive snaps or fewer either got hurt or got benched, and which one it
+was is usually the actual joke — a week 4 trophy player managed 6 snaps against a 17.35
+projection because he left the game injured, and **nothing in the JSON says so.** There is no
+injury or status field at all, so this cannot be looked up in the file: search the week's
+news or ask. Reporting the snap count without the reason reads as a shrug.
+
 `still_playing` lists starters whose NFL game is in progress; `unplayed` lists starters
 with no score at all. If either is non-empty the week isn't final — say so rather than
 reporting a result that may not survive the fourth quarter.
@@ -142,9 +152,14 @@ Team A 142.60 — Team B 88.12
 
 === STANDINGS ===
 
-1. Team            record    PF
+1. Team            record    PF     all-play
 ...all ten...
 ```
+
+**The standings block carries the all-play column**, and the closing paragraph says in
+passing what all-play is — the record you'd have against all nine other teams every week.
+Week 1 had the column, weeks 2 to 4 silently dropped it, and it was missed the week that
+luck was the whole frame. `to_email_html.py` picks up the fifth column and labels it.
 
 ### Voice
 
@@ -187,6 +202,44 @@ The craft rules themselves:
   their scores and nothing else spends the same three figures on inventory nobody can
   picture. Ask what each number is *for*, never how many
   there are.
+- **Never write a clause you cannot restate as a claim.** This is the most expensive habit
+  in the job and week 4 produced three of them in one draft, each drawing the same question
+  back — *what does that mean?*
+    - "beat his son-in-law by 21.56, **which settles one in-law question and immediately
+      raises another**" — there was no first question and no second one.
+    - "tenth in scoring to sixth in a week, **which is the fastest turnaround this format
+      allows**" — not merely empty but false; tenth to first would be faster.
+    - "he has benched his own team's players twice and won both times, **and I would like
+      somebody to explain to me why that isn't just strategy**" — a shrug wearing a joke's
+      clothes.
+  All three have the *rhythm* of a reframe and assert nothing, which is exactly how the
+  "turn after every number" rule above gets gamed: the rule is satisfied by anything shaped
+  like a punchline. **The test: say out loud what the clause claims. If you can't, it claims
+  nothing.** Watch for "which is the most/fastest/only X that Y allows", "make of that what
+  you will", and "which raises the question" — these read as precision and are decoration.
+  A comparison pass will never catch one, because an empty clause contains no figures.
+- **The fix is usually to invent a claim, not to delete the clause.** The third example above
+  was replaced with "**I want to know who he's got feeding him info from inside the locker
+  room**", and that is the whole lesson in one edit: don't ask the reader to find the
+  situation funny, assert something specific that is. A named conspiracy beats a raised
+  eyebrow every time.
+- **Build one joke that runs across the recap.** The locker-room informant was invented in
+  the first matchup and cashed four matchups later, when a second manager did the same thing
+  — "does he have the same informant?" — turning a one-off into a through-line for eight
+  words. The league reads to the end if the end rewards it. One per recap, invented
+  early and paid off late, and it costs nothing because the week supplies the coincidence.
+- **Put the punch word last.** "She didn't have to get good, in other words — she just had to
+  get better than me" was rewritten to "In other words, she didn't have to get good — she
+  just had to get better than me." Identical words; the self-deprecation moved to the final
+  position, where it lands. Qualifiers and asides go at the front of the sentence.
+- **Address the award recipient directly.** Award blurbs are the one place second person
+  works: "the cards all around you looked better, but you've gotta play the one you're
+  handed" beats any third-person description of the same bad luck, and for the consolation
+  awards warmth is the entire job. It also beats reaching for lore — if the award's *name*
+  already carries the reference, explaining it again is redundant.
+- **Relationship labels for the first reference, names after that.** "My dad beat my
+  brother-in-law" is good once; the next sentence needs the name, because by then "he" could
+  be either of them. Any paragraph holding two people needs at least one name per person.
 - **A punchline needs a sentence on one side of it.** The reliable shape is setup then
   landing, or a flat fact that a following line retroactively reframes. A bare short
   sentence as the *closer* usually dies — it reads as trailing off. The same sentence
