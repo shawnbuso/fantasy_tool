@@ -7,7 +7,14 @@ inlined per element, which is ugly to read and the only thing that actually work
 Open the output in a browser, select all, copy, paste into the Gmail composer. The
 formatting comes across because the clipboard carries the rendered HTML.
 
-    uv run python .../to_email_html.py --recap week-01-recap.md --out week-01.html
+    uv run python .../to_email_html.py --recap week-04.txt --out week-04.html
+
+Two recap shapes reach this script and it detects which one it was handed. Week 1 was
+drafted as markdown (`## headings`, `**Subject:**`, pipe tables); every week since has
+used the plain-text email shape SKILL.md actually specifies -- `Subject:` on line one,
+`=== SECTION ===` dividers, a scoreline per matchup, and a space-aligned standings
+block. Passing a .txt recap to the markdown parser yields one undifferentiated wall of
+paragraphs, which is what made week 3 reach for a throwaway generator instead.
 
 The "Notes for you, not for the league" section is dropped -- it is addressed to the
 author and must never reach the league.
@@ -159,6 +166,129 @@ def convert(markdown: str) -> tuple[str, str]:
     return f'<div style="{BODY}">' + "\n".join(parts) + "</div>", subject
 
 
+# --- the plain-text recap shape ---------------------------------------------------
+# Section names are matched rather than guessed at, because the same "N." line means a
+# ranking in one section and a standings row in another, and the same em dash separates
+# a scoreline from an award.
+SECTION_RE = re.compile(r"^=== (.+?) ===$")
+SCORE_RE = re.compile(r"^(.+?)\s+(\d+\.\d\d)\s+—\s+(.+?)\s+(\d+\.\d\d)$")
+STANDING_RE = re.compile(
+    r"^\s*(\d+)\.\s+(.+?)\s{2,}(\d+-\d+)\s+(\d+\.\d\d)(?:\s+(\d+-\d+))?$"
+)
+RANK_RE = re.compile(r"^(\d+)\.\s+(.*)$")
+AWARD_RE = re.compile(r"^(THE [A-Z'’ ]+?)\s+—\s+(.*)$")
+
+
+def convert_plaintext(text: str) -> tuple[str, str]:
+    """Same contract as convert(): the pasteable body, and the subject line."""
+    text = text.split("## Notes for you")[0]
+    lines = text.split("\n")
+
+    subject = ""
+    if lines and lines[0].startswith("Subject:"):
+        subject = lines[0].split(":", 1)[1].strip()
+        lines = lines[1:]
+
+    parts: list[str] = []
+    paragraph: list[str] = []
+    numbered: list[str] = []
+    table: list[list[str]] = []
+    section = ""
+
+    def flush_paragraph() -> None:
+        if not paragraph:
+            return
+        joined = " ".join(paragraph)
+        # An award is a paragraph whose name runs up to the first em dash. Bolding the
+        # name is the only thing separating four awards from four more paragraphs.
+        award = AWARD_RE.match(joined)
+        if award:
+            parts.append(
+                f'<p style="{P}"><strong>{inline(award.group(1))}</strong> — '
+                f"{inline(award.group(2))}</p>"
+            )
+        else:
+            parts.append(f'<p style="{P}">{inline(joined)}</p>')
+        paragraph.clear()
+
+    def flush_list() -> None:
+        if numbered:
+            items = "".join(f'<li style="{LI}">{inline(i)}</li>' for i in numbered)
+            parts.append(f'<ol style="margin:0 0 16px;padding-left:24px;">{items}</ol>')
+            numbered.clear()
+
+    def flush_table() -> None:
+        if not table:
+            return
+        head = ["#", "Team", "W-L", "PF"]
+        if max(len(r) for r in table) > 4:
+            head.append("All-play")
+        cells = "".join(f'<th style="{TH}">{inline(c)}</th>' for c in head)
+        rows = [f"<tr>{cells}</tr>"]
+        for row in table:
+            rows.append(
+                "<tr>"
+                + "".join(f'<td style="{TD}">{inline(c)}</td>' for c in row)
+                + "</tr>"
+            )
+        parts.append(
+            '<table cellpadding="0" cellspacing="0" '
+            'style="border-collapse:collapse;width:100%;margin:0 0 18px;">'
+            + "".join(rows)
+            + "</table>"
+        )
+        table.clear()
+
+    def flush_all() -> None:
+        flush_paragraph()
+        flush_list()
+        flush_table()
+
+    for raw in lines:
+        stripped = raw.strip()
+
+        if not stripped:
+            flush_all()
+            continue
+
+        heading = SECTION_RE.match(stripped)
+        if heading:
+            flush_all()
+            section = heading.group(1).strip()
+            parts.append(f'<h2 style="{H2}">{inline(section.title())}</h2>')
+            continue
+
+        if section == "STANDINGS":
+            row = STANDING_RE.match(raw)
+            if row:
+                flush_paragraph()
+                table.append([g for g in row.groups() if g is not None])
+                continue
+            flush_table()
+
+        if section == "THE MATCHUPS":
+            score = SCORE_RE.match(stripped)
+            if score:
+                flush_all()
+                parts.append(f'<h3 style="{H3}">{inline(stripped)}</h3>')
+                continue
+
+        if section == "POWER RANKINGS":
+            rank = RANK_RE.match(stripped)
+            if rank:
+                flush_paragraph()
+                numbered.append(rank.group(2))
+                continue
+            if numbered and raw.startswith("    "):
+                numbered[-1] += " " + stripped
+                continue
+
+        paragraph.append(stripped)
+
+    flush_all()
+    return f'<div style="{BODY}">' + "\n".join(parts) + "</div>", subject
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recap", type=Path, required=True)
@@ -171,7 +301,12 @@ def main() -> None:
         "an HTML fragment that paints every color itself does not.",
     )
     args = parser.parse_args()
-    body, subject = convert(args.recap.read_text())
+    source = args.recap.read_text()
+    # A "=== SECTION ===" divider is the unambiguous marker of the plain-text shape.
+    if re.search(r"^=== .+ ===$", source, re.MULTILINE):
+        body, subject = convert_plaintext(source)
+    else:
+        body, subject = convert(source)
 
     if args.fragment:
         # Artifacts supply their own document shell, so emit content only. A *Markdown*
