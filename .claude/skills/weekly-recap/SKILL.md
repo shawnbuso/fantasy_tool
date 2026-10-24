@@ -72,8 +72,14 @@ the lead story of the week — a game won by a player who did nothing at all is 
 funniest thing this league can produce.
 
 `left_on_bench` is the difference between the raw score and the best legal lineup that
-manager owned. It is the most reliable joke in the file — mine it every week. It
-deliberately ignores the adjustment, which nobody earned.
+manager owned. It is the most reliable joke in the file, which is exactly why it needs
+rationing: **at most two matchups per recap should lean on a bench or best-lineup
+comparison**, and only where it's genuinely the story — a bench player who would have
+flipped the result, a season-long counter cashing in. Weeks 5 and 6 put one in all five
+matchups and the verdict was "we're over-indexing a bit on the starters vs bench
+comparison." The other matchups find their angle elsewhere: the family matchup, a player's
+arc, projections, the NFL week, the through-line. It deliberately ignores the adjustment,
+which nobody earned.
 
 **A bench player's score is not what he cost his manager.** Starting him means sitting
 somebody, so the real loss is his points *minus whoever he'd have replaced*. Isaiah
@@ -244,6 +250,16 @@ The craft rules themselves:
   landing, or a flat fact that a following line retroactively reframes. A bare short
   sentence as the *closer* usually dies — it reads as trailing off. The same sentence
   as a first beat, with one more after it, lands.
+- **Read every joke literally once.** A joke can be shaped right and still contradict its
+  own premise. Week 6 called a participation trophy "the first one awarded for holding onto
+  the ball", for a player whose whole qualification was never touching the ball, and it was
+  cut before sending as "odd". The test is the same one as for empty clauses: say what the
+  line asserts, and check it against the facts it's joking about.
+- **Tropes beat lore when the line is about the trope.** The dossier is for material, not for
+  correcting idioms. A week 6 draft said a parent-beats-kid result would "come up at
+  Thanksgiving", then got "fixed" to the family's own holiday from the dossier, and was put
+  back before sending: Thanksgiving is the stereotypical holiday where parents and kids bring
+  this stuff up, and that stereotype was the joke.
 - **Be specific.** "Left 66 on the bench" is funny. "Had a rough week" is not. Every
   barb should be anchored to something real out of the JSON.
 - **Never explain the football.** This league shares a home team and watched the games you
@@ -334,6 +350,14 @@ Read the `## Season log` at the end of the dossier before writing, and pick up w
 is still running — a rivalry, a losing streak, a prediction that aged badly. Continuity
 is what makes people look forward to it, and it's material that costs nothing because
 the season generates it for free.
+
+**Continuity cuts both ways: a new line must not contradict what an earlier recap already
+told the league.** Week 6 said a running bit's moment "lasts precisely one Sunday", and week
+1 had already declared that moment was week 1 — so the league had been told two different
+things, and the line was softened before sending. The team was also 4-2 and second, so it
+overstated one bad week. Before writing any *only / first / one time / never* claim about a
+running bit, search the earlier `week-NN-sent.txt` files for it; they are the record of
+what the league actually read.
 
 ## 4. Verify every number before it goes out
 
