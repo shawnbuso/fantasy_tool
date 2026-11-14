@@ -22,6 +22,7 @@ import argparse
 import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[4]
@@ -295,6 +296,22 @@ def resolve_position(player: dict, by_id: dict[str, str], by_name: dict[str, str
     return found or by_name.get(_key(player["name"]), "")
 
 
+def empty_slots(players: list[dict], slots: list[str]) -> list[str]:
+    """The league's starting slots this team left unfilled, one entry per gap.
+
+    Yahoo prints nothing for an empty slot, so it only shows up as a slot the league has
+    and the team's starters don't.
+    """
+    remaining = Counter(p["slot"] for p in players if p["slot"] not in BENCH_SLOTS)
+    missing = []
+    for slot in slots:
+        if remaining[slot]:
+            remaining[slot] -= 1
+        else:
+            missing.append(slot)
+    return missing
+
+
 def bench_swings(players: list[dict], slots: list[str]) -> list[dict]:
     """What each bench player would actually have added, not what he scored.
 
@@ -305,14 +322,17 @@ def bench_swings(players: list[dict], slots: list[str]) -> list[dict]:
 
     Returns the best single swap available for each bench player: his points, the
     cheapest starter he was eligible to replace, and the difference.
+
+    A slot left empty counts as a starter who scored 0.00, so a bench player who could
+    have filled it gains his whole score; `instead_of` is None for those. Starters are
+    matched to slots by their own `slot`, never by position in the list -- an empty slot
+    used to shift every later starter onto the wrong slot (week 8 had a defense standing
+    in for a missing kicker).
     """
     swings: list[dict] = []
-    started = [
-        {**p, "slot": slot}
-        for p, slot in zip(
-            [p for p in players if p["slot"] not in BENCH_SLOTS], slots, strict=False
-        )
-    ]
+    started = [p for p in players if p["slot"] not in BENCH_SLOTS]
+    for slot in empty_slots(players, slots):
+        started.append({"name": None, "points": 0.0, "slot": slot})
     for player in players:
         if player["slot"] not in BENCH_SLOTS or player["points"] is None:
             continue
@@ -414,9 +434,16 @@ def build(
             )
             parsed[team_id] = parse_team_page(page.html)
 
-    # Every team runs the same lineup, so one team's starting slots define the league's.
-    first = parsed[min(parsed)]
-    slots = [p["slot"] for p in first["players"] if p["slot"] not in BENCH_SLOTS]
+    # Every team runs the same lineup, so the fullest team's starting slots define the
+    # league's. Not simply the first team: a manager who leaves a slot empty prints one
+    # starter short, and taking that team's list would shrink everyone's lineup.
+    slots = max(
+        (
+            [p["slot"] for p in team["players"] if p["slot"] not in BENCH_SLOTS]
+            for team in parsed.values()
+        ),
+        key=len,
+    )
 
     records: dict[int, dict] = {}
     for team_id, team in parsed.items():
@@ -463,6 +490,9 @@ def build(
             # Per-player net gain, so a recap can say what a swap was worth rather
             # than quoting a bench score as though it were free.
             "bench_swings": bench_swings(team["players"], slots),
+            # Slots the manager left unfilled. Facts for the swing maths, not material:
+            # an empty slot reads as not paying attention, which the recap never implies.
+            "empty_slots": empty_slots(team["players"], slots),
             "should_have_started": [
                 {"slot": p["slot"], "name": p["name"], "points": p["points"]}
                 for p in ideal
