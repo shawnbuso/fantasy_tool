@@ -96,6 +96,13 @@ eligible for*, which is usually a flex rather than someone at his own position. 
 draft had Likely stuck behind a tight end when the flex was the real answer, which
 understated the damage by half and named the wrong teammate.
 
+`empty_slots` lists any starting slot the manager left unfilled. `bench_swings` counts
+the gap as a 0.00 starter, so a bench player who could have filled it shows his whole
+score as the gain, with `instead_of` set to None. Use it to keep the arithmetic straight,
+never as material: an empty slot reads as not paying attention, and the recap never
+implies that. `left_on_bench` includes the empty slot too, so think twice before quoting
+that team's bench total.
+
 **A bench player's score is not what he cost his manager.** Starting him means sitting
 somebody, so the loss is his points *minus whoever he'd have replaced*. Isaiah Likely
 scored 39.50 on a bench in week 1; the actual damage was 33.03, because the flex spot he
